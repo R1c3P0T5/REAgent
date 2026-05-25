@@ -1,0 +1,26 @@
+# IDE
+.vscode/*
+
+# AI Agent
+.agents/*
+.claude/*
+.codex/*
+.gemini/*
+.opencode/*
+
+# Git worktrees
+.worktrees/*
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Artifact
+.env
