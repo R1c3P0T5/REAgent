@@ -64,13 +64,9 @@ class Session:
         return len(json.dumps(list(self._history), default=str)) // 4
 
     def truncate(self) -> None:
-        if self._estimate_tokens() <= TOKEN_LIMIT:
-            return
-
-        # Find turn boundaries: each UserMessage (except the first) starts a new turn.
-        # Drop whole turns from index 1 onward until we're under the limit.
+        # Drop oldest turns (from index 1) until history fits within TOKEN_LIMIT.
+        # Each turn spans from a UserMessage to just before the next UserMessage.
         while self._estimate_tokens() > TOKEN_LIMIT and len(self._history) > 1:
-            # Find the end of the first droppable turn (from index 1 to the next UserMessage)
             end = 2
             while end < len(self._history) and self._history[end]["role"] != "user":
                 end += 1

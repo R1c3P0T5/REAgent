@@ -5,6 +5,7 @@ from typing import Any, Literal
 
 MAX_OUTPUT = 50_000
 
+# Snapshot at import time — intentionally fixed to the workspace root at startup.
 _ALLOWED_ROOTS: tuple[str, ...] = (
     os.path.realpath(os.getcwd()),
     os.path.realpath("/tmp"),
@@ -18,6 +19,7 @@ def resolve_path(path: str) -> str:
         allowed = ", ".join(_ALLOWED_ROOTS)
         raise PermissionError(f"Path '{resolved}' is outside allowed roots: {allowed}")
     return resolved
+
 
 PropType = Literal["string", "integer", "number", "boolean", "array", "object", "null"]
 
