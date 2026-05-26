@@ -18,6 +18,7 @@ from reagent.tools import TOOLS, TOOL_HANDLERS  # noqa: E402
 
 
 MODEL = os.environ["MODEL_ID"]
+MAX_ITERATIONS = 50
 
 
 def extract_text(message: Any) -> str:
@@ -51,7 +52,7 @@ def system_prompt() -> str:
 
 
 def agent_loop(session: Session) -> None:
-    while True:
+    for _ in range(MAX_ITERATIONS):
         messages = [{"role": "system", "content": system_prompt()}, *session.messages]
         response = completion(
             model=MODEL,
@@ -61,6 +62,12 @@ def agent_loop(session: Session) -> None:
 
         choice0 = cast(ModelResponse, response).choices[0]
         message = choice0.message
+
+        if choice0.finish_reason == "length":
+            session.add_assistant(
+                "Stopped: response hit max tokens. The output may be incomplete."
+            )
+            return
 
         if choice0.finish_reason != "tool_calls":
             session.add_assistant(extract_text(message))
@@ -87,6 +94,8 @@ def agent_loop(session: Session) -> None:
             result = handler(tool_input) if handler else f"Error: unknown tool {name!r}"
 
             session.add_tool_result(tc.id, result)
+
+    session.add_assistant(f"Stopped: reached iteration limit of {MAX_ITERATIONS}.")
 
 
 def main() -> int:
