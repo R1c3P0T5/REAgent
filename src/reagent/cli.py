@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+from typing import Any, cast
 
 from dotenv import load_dotenv
-from openai import OpenAI
 
 load_dotenv(override=True)
+os.environ.setdefault("LITELLM_LOG", "ERROR")
 
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+from litellm import completion  # noqa: E402
+from litellm.types.utils import ModelResponse  # noqa: E402
+
+
 MODEL = os.environ["MODEL_ID"]
 
 
@@ -17,21 +21,45 @@ class SessionState:
     messages: list
 
 
+def extract_text(message: Any) -> str:
+    content = getattr(message, "content", None)
+
+    if isinstance(content, str):
+        return content
+
+    if not isinstance(content, list):
+        return ""
+
+    texts = []
+    for block in content:
+        text = block.get("text") if isinstance(block, dict) else getattr(block, "text", None)
+        if text:
+            texts.append(str(text))
+
+    return "\n".join(texts).strip()
+
+
 def agent_loop(state: SessionState):
     while True:
-        response = client.chat.completions.create(
+        response = completion(
             model=MODEL,
             messages=state.messages,
-            max_completion_tokens=8000,
-        )
-        state.messages.append(
-            {"role": "assistant", "content": response.choices[0].message.content}
+            stream=False,
         )
 
-        if response.choices[0].finish_reason == "stop":
+        choice0 = cast(ModelResponse, response).choices[0]
+
+        state.messages.append(
+            {
+                "role": "assistant",
+                "content": extract_text(choice0.message),
+            }
+        )
+
+        if choice0.finish_reason == "stop":
             return
 
-        # if response.choices[0].finish_reason != "tool_calls":
+        # if choice0.finish_reason != "tool_calls":
         #     return
 
 
@@ -39,7 +67,7 @@ def main() -> int:
     history = []
     while True:
         try:
-            prompt = input("\033[36m > \033[0m")
+            prompt = input("\033[36m> \033[0m")
         except (EOFError, KeyboardInterrupt):
             break
 
@@ -52,6 +80,7 @@ def main() -> int:
 
         result = state.messages[-1]["content"]
         if result:
+            print()
             print(result)
 
         print()
