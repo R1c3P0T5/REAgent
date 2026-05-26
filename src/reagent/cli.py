@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import os
 from typing import Any, Literal, TypedDict, cast
 
@@ -48,11 +49,20 @@ def extract_text(message: Any) -> str:
     return "\n".join(texts).strip()
 
 
+def system_prompt() -> str:
+    return (
+        "You are a CTF agent.\n"
+        f"Current date/time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}\n"
+        f"Current working directory: {os.getcwd()}\n"
+    )
+
+
 def agent_loop(session: Session) -> None:
     while True:
+        messages = [{"role": "system", "content": system_prompt()}, *session.history]
         response = completion(
             model=MODEL,
-            messages=session.history,
+            messages=messages,
         )
 
         choice0 = cast(ModelResponse, response).choices[0]
