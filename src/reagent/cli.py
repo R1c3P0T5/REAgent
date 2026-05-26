@@ -50,6 +50,7 @@ def system_prompt() -> str:
 
 def agent_loop(session: Session) -> None:
     for _ in range(MAX_ITERATIONS):
+        session.truncate()
         messages = [{"role": "system", "content": system_prompt()}, *session.messages]
         try:
             response = completion(
