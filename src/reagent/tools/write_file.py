@@ -1,11 +1,14 @@
 import os
 from typing import Any
 
-from reagent.tools.base import Tool, params, prop
+from reagent.tools.base import Tool, params, prop, resolve_path
 
 
 def write_file(path: str, content: str) -> str:
-    path = os.path.abspath(path)
+    try:
+        path = resolve_path(path)
+    except PermissionError as e:
+        return f"Error: {e}"
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w") as f:

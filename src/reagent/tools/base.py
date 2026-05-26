@@ -1,8 +1,23 @@
 from abc import ABC, abstractmethod
+import os
 from typing import Any, Literal
 
 
 MAX_OUTPUT = 50_000
+
+_ALLOWED_ROOTS: tuple[str, ...] = (
+    os.path.realpath(os.getcwd()),
+    os.path.realpath("/tmp"),
+)
+
+
+def resolve_path(path: str) -> str:
+    """Resolve path and verify it's within an allowed root."""
+    resolved = os.path.realpath(path)
+    if not any(resolved.startswith(root + os.sep) or resolved == root for root in _ALLOWED_ROOTS):
+        allowed = ", ".join(_ALLOWED_ROOTS)
+        raise PermissionError(f"Path '{resolved}' is outside allowed roots: {allowed}")
+    return resolved
 
 PropType = Literal["string", "integer", "number", "boolean", "array", "object", "null"]
 

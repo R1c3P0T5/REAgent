@@ -1,11 +1,13 @@
-import os
 from typing import Any
 
-from reagent.tools.base import Tool, params, prop
+from reagent.tools.base import Tool, params, prop, resolve_path
 
 
 def edit_file(path: str, start_line: int, end_line: int | None, content: str) -> str:
-    path = os.path.abspath(path)
+    try:
+        path = resolve_path(path)
+    except PermissionError as e:
+        return f"Error: {e}"
     try:
         with open(path) as f:
             lines = f.readlines()

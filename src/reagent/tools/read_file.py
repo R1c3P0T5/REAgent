@@ -1,12 +1,11 @@
-import os
 from typing import Any
 
-from reagent.tools.base import MAX_OUTPUT, Tool, params, prop
+from reagent.tools.base import MAX_OUTPUT, Tool, params, prop, resolve_path
 
 
 def read_file(path: str, start_line: int | None = None, end_line: int | None = None) -> str:
-    path = os.path.abspath(path)
     try:
+        path = resolve_path(path)
         with open(path) as f:
             lines = f.readlines()
 
