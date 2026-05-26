@@ -4,7 +4,7 @@ import json
 from collections.abc import Callable
 from typing import Any, Literal, TypedDict
 
-TOKEN_LIMIT = 80_000
+TOKEN_LIMIT = 60_000
 
 
 class UserMessage(TypedDict):
@@ -58,6 +58,10 @@ class Session:
         if content:
             print(f"\n{content}")
 
+    def add_think(self, content: str) -> None:
+        self._history.append(AssistantMessage(role="assistant", content=content))
+        print(f"\n\033[90m{content}\033[0m")
+
     def add_tool_calls(self, raw_message: Any) -> None:
         self._history.append(
             AssistantToolCallMessage(
@@ -86,6 +90,7 @@ class Session:
         if self._estimate_tokens() <= TOKEN_LIMIT:
             return
 
+        print(f"[!] compacting ... ({self._estimate_tokens()})\n")
         turn_starts = [i for i, m in enumerate(self._history) if m["role"] == "user"]
         if len(turn_starts) < 2:
             self.truncate()
