@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 import os
-from typing import Any, Literal, TypedDict, cast
+from typing import Any, cast
 
 from dotenv import load_dotenv
 
@@ -14,20 +13,11 @@ os.environ.setdefault("LITELLM_LOG", "ERROR")
 from litellm import completion  # noqa: E402
 from litellm.types.utils import ModelResponse  # noqa: E402
 
+from reagent.session import Session  # noqa: E402
 from reagent.tools import TOOLS, TOOL_HANDLERS  # noqa: E402
 
 
 MODEL = os.environ["MODEL_ID"]
-
-
-class Message(TypedDict):
-    role: Literal["user", "assistant", "tool"]
-    content: str | None
-
-
-@dataclass
-class Session:
-    history: list[Message]
 
 
 def extract_text(message: Any) -> str:
@@ -62,7 +52,7 @@ def system_prompt() -> str:
 
 def agent_loop(session: Session) -> None:
     while True:
-        messages = [{"role": "system", "content": system_prompt()}, *session.history]
+        messages = [{"role": "system", "content": system_prompt()}, *session.messages]
         response = completion(
             model=MODEL,
             messages=messages,
@@ -73,9 +63,7 @@ def agent_loop(session: Session) -> None:
         message = choice0.message
 
         if choice0.finish_reason != "tool_calls":
-            session.history.append(
-                Message(role="assistant", content=extract_text(message))
-            )
+            session.add_assistant(extract_text(message))
             return
 
         if not message.tool_calls:
@@ -83,13 +71,7 @@ def agent_loop(session: Session) -> None:
                 f"finish_reason=tool_calls but tool_calls is empty: {message}"
             )
 
-        session.history.append(
-            {
-                "role": "assistant",
-                "content": message.content,
-                "tool_calls": message.tool_calls,  # type: ignore[arg-type]
-            }
-        )
+        session.add_tool_calls(message)
 
         for tc in message.tool_calls:
             name = tc.function.name or ""
@@ -97,27 +79,18 @@ def agent_loop(session: Session) -> None:
             try:
                 tool_input = json.loads(tc.function.arguments)
             except json.JSONDecodeError as exc:
-                session.history.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tc.id,  # type: ignore[arg-type]
-                        "content": f"Error: invalid tool arguments: {exc}",
-                    }
-                )
+                session.add_tool_result(tc.id, f"Error: invalid tool arguments: {exc}")
                 continue
 
             print(f"\n\033[32m•\033[0m {name}({tool_input})")
             handler = TOOL_HANDLERS.get(name)
             result = handler(tool_input) if handler else f"Error: unknown tool {name!r}"
-            print(f"\033[90m{result}\033[0m")
 
-            session.history.append(
-                {"role": "tool", "tool_call_id": tc.id, "content": result}  # type: ignore[arg-type]
-            )
+            session.add_tool_result(tc.id, result)
 
 
 def main() -> int:
-    session = Session(history=[])
+    session = Session()
     while True:
         try:
             prompt = input("\033[36m> \033[0m")
@@ -127,13 +100,7 @@ def main() -> int:
         if prompt.strip().lower() in ("/quit", "/exit"):
             break
 
-        session.history.append(Message(role="user", content=prompt))
+        session.add_user(prompt)
         agent_loop(session)
-
-        result = session.history[-1]["content"]
-        if result:
-            print()
-            print(result)
-
         print()
     return 0
