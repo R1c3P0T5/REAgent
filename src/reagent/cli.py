@@ -63,7 +63,9 @@ def agent_loop(session: Session) -> None:
             session.add_assistant(f"Stopped: request rejected by API - {exc}")
             return
 
-        choice0 = cast(ModelResponse, response).choices[0]
+        resp = cast(ModelResponse, response)
+        session.record_usage(getattr(resp, "usage", None))
+        choice0 = resp.choices[0]
         message = choice0.message
 
         if choice0.finish_reason == "length":
