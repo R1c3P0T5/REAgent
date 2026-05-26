@@ -11,6 +11,7 @@ load_dotenv(override=True)
 os.environ.setdefault("LITELLM_LOG", "ERROR")
 
 from litellm import completion  # noqa: E402
+from litellm.exceptions import BadRequestError  # noqa: E402
 from litellm.types.utils import ModelResponse  # noqa: E402
 
 from reagent.session import Session  # noqa: E402
@@ -32,11 +33,7 @@ def extract_text(message: Any) -> str:
 
     texts = []
     for block in content:
-        text = (
-            block.get("text")
-            if isinstance(block, dict)
-            else getattr(block, "text", None)
-        )
+        text = block.get("text") if isinstance(block, dict) else getattr(block, "text", None)
         if text:
             texts.append(str(text))
 
@@ -54,19 +51,22 @@ def system_prompt() -> str:
 def agent_loop(session: Session) -> None:
     for _ in range(MAX_ITERATIONS):
         messages = [{"role": "system", "content": system_prompt()}, *session.messages]
-        response = completion(
-            model=MODEL,
-            messages=messages,
-            tools=TOOLS,
-        )
+        try:
+            response = completion(
+                model=MODEL,
+                messages=messages,
+                tools=TOOLS,
+                num_retries=10,
+            )
+        except BadRequestError as exc:
+            session.add_assistant(f"Stopped: request rejected by API - {exc}")
+            return
 
         choice0 = cast(ModelResponse, response).choices[0]
         message = choice0.message
 
         if choice0.finish_reason == "length":
-            session.add_assistant(
-                "Stopped: response hit max tokens. The output may be incomplete."
-            )
+            session.add_assistant("Stopped: response hit max tokens. The output may be incomplete.")
             return
 
         if choice0.finish_reason != "tool_calls":
@@ -74,9 +74,7 @@ def agent_loop(session: Session) -> None:
             return
 
         if not message.tool_calls:
-            raise RuntimeError(
-                f"finish_reason=tool_calls but tool_calls is empty: {message}"
-            )
+            raise RuntimeError(f"finish_reason=tool_calls but tool_calls is empty: {message}")
 
         session.add_tool_calls(message)
 
