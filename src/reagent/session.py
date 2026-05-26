@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from typing import Any, Literal, TypedDict
 
 TOKEN_LIMIT = 80_000
@@ -80,6 +81,23 @@ class Session:
 
     def _estimate_tokens(self) -> int:
         return len(json.dumps(list(self._history), default=str)) // 4
+
+    def compact(self, completion_fn: Callable[[list[Message]], str]) -> None:
+        if self._estimate_tokens() <= TOKEN_LIMIT:
+            return
+
+        turn_starts = [i for i, m in enumerate(self._history) if m["role"] == "user"]
+        if len(turn_starts) < 2:
+            self.truncate()
+            return
+
+        compact_end = turn_starts[-1]
+        to_compact = list(self._history[1:compact_end])
+        try:
+            summary = completion_fn(to_compact)
+            self._history[1:compact_end] = [UserMessage(role="user", content=f"[Context summary: {summary}]")]
+        except Exception:
+            self.truncate()
 
     def truncate(self) -> None:
         # Drop oldest turns (from index 1) until history fits within TOKEN_LIMIT.

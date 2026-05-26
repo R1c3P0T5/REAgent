@@ -14,6 +14,7 @@ from litellm import completion  # noqa: E402
 from litellm.exceptions import BadRequestError  # noqa: E402
 from litellm.types.utils import ModelResponse  # noqa: E402
 
+from reagent.compact import make_compact_fn  # noqa: E402
 from reagent.session import Session  # noqa: E402
 from reagent.tools import TOOLS, TOOL_HANDLERS  # noqa: E402
 
@@ -49,8 +50,9 @@ def system_prompt() -> str:
 
 
 def agent_loop(session: Session) -> None:
+    compact_fn = make_compact_fn(MODEL)
     for _ in range(MAX_ITERATIONS):
-        session.truncate()
+        session.compact(compact_fn)
         messages = [{"role": "system", "content": system_prompt()}, *session.messages]
         try:
             response = completion(
