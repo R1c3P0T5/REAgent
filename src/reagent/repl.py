@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from reagent.session import Session
 from reagent.session.turn import run_turn
 
@@ -15,5 +17,5 @@ def run(session: Session) -> None:
             break
 
         session.add_user(prompt)
-        run_turn(session)
+        asyncio.run(run_turn(session))
         print()

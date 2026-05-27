@@ -17,6 +17,7 @@ dev = [
     "pre-commit>=4.6.0",
     "pyright>=1.1.409",
     "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.15.14",
 ]
@@ -40,6 +41,9 @@ pythonVersion = "3.10"
 venvPath = "."
 venv = ".venv"
 extraPaths = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 120

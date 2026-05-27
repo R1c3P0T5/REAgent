@@ -7,7 +7,7 @@ from typing import Any, cast
 import litellm
 
 litellm.drop_params = True
-from litellm import completion  # noqa: E402
+from litellm import acompletion  # noqa: E402
 from litellm.exceptions import BadRequestError  # noqa: E402
 from litellm.types.utils import ModelResponse  # noqa: E402
 
@@ -46,8 +46,8 @@ def extract_text(message: Any) -> str:
     return "\n".join(texts).strip()
 
 
-def run_turn(session: Session) -> None:
-    compact_fn = make_compact_fn(MODEL)
+async def run_turn(session: Session) -> None:
+    compact_fn = make_compact_fn(MODEL)  # TODO: make_compact_fn should use acompletion; sync call blocks event loop
 
     for _ in range(MAX_ITERATIONS):
         before = session._estimate_tokens()
@@ -61,7 +61,7 @@ def run_turn(session: Session) -> None:
         try:
             resp = cast(
                 ModelResponse,
-                completion(
+                await acompletion(
                     model=MODEL,
                     messages=messages,
                     tools=TOOLS,
@@ -107,6 +107,7 @@ def run_turn(session: Session) -> None:
 
             session.emit_tool_call(name, tool_input)
             handler = TOOL_HANDLERS.get(name)
+            # TODO: wrap handler in run_in_executor; subprocess.run() blocks event loop
             result = handler(tool_input) if handler else f"Error: unknown tool {name!r}"
 
             session.add_tool_result(tc.id, result)
