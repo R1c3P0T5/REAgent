@@ -63,7 +63,8 @@ class Session:
 
     def add_think(self, content: str) -> None:
         self._history.append(AssistantMessage(role="assistant", content=content))
-        self._sink.on_think(content)
+        if content:
+            self._sink.on_think(content)
 
     def add_tool_calls(self, raw_message: Any) -> None:
         self._history.append(
@@ -96,10 +97,11 @@ class Session:
         return len(json.dumps(list(self._history), default=str)) // 4
 
     def compact(self, completion_fn: Callable[[list[Message]], str]) -> None:
-        if self._estimate_tokens() <= TOKEN_LIMIT:
+        tokens = self._estimate_tokens()
+        if tokens <= TOKEN_LIMIT:
             return
 
-        self.emit_status(f"[!] compacting ... ({self._estimate_tokens()})\n")
+        self.emit_status(f"[!] compacting ... ({tokens})\n")
         turn_starts = [i for i, m in enumerate(self._history) if m["role"] == "user"]
         if len(turn_starts) < 2:
             self.truncate()

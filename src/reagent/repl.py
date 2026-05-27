@@ -6,10 +6,11 @@ from reagent.session import Session
 from reagent.session.turn import run_turn
 
 
-def run(session: Session) -> None:
+async def run(session: Session) -> None:
+    loop = asyncio.get_running_loop()
     while True:
         try:
-            prompt = input("\033[36m> \033[0m")
+            prompt = await loop.run_in_executor(None, lambda: input("\033[36m> \033[0m"))
         except (EOFError, KeyboardInterrupt):
             break
 
@@ -17,5 +18,9 @@ def run(session: Session) -> None:
             break
 
         session.add_user(prompt)
-        asyncio.run(run_turn(session))
+        await run_turn(session)
         print()
+
+
+def start(session: Session) -> None:
+    asyncio.run(run(session))

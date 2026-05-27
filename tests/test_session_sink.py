@@ -1,6 +1,6 @@
 # tests/test_session_sink.py
 from reagent.protocol import SilentSink
-from reagent.session.session import Session
+from reagent.session import Session
 
 
 class RecordingSink:
