@@ -55,7 +55,7 @@ def run_turn(session: Session) -> None:
         after = session._estimate_tokens()
 
         if after < before:
-            print(f"\033[33m[compact: {before} → {after} tokens]\033[0m")
+            session.emit_status(f"\033[33m[compact: {before} → {after} tokens]\033[0m")
 
         messages = [{"role": "system", "content": system_prompt()}, *session.messages]
         try:
@@ -105,7 +105,7 @@ def run_turn(session: Session) -> None:
                 session.add_tool_result(tc.id, f"Error: invalid tool arguments: {exc}")
                 continue
 
-            print(f"\n\033[32m•\033[0m {name}({tool_input})")
+            session.emit_tool_call(name, tool_input)
             handler = TOOL_HANDLERS.get(name)
             result = handler(tool_input) if handler else f"Error: unknown tool {name!r}"
 
