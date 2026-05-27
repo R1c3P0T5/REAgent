@@ -48,6 +48,7 @@ def extract_text(message: Any) -> str:
 
 async def run_turn(session: Session) -> None:
     compact_fn = make_compact_fn(MODEL)  # TODO: make_compact_fn should use acompletion; sync call blocks event loop
+    sys_prompt = system_prompt()
 
     for _ in range(MAX_ITERATIONS):
         before = session._estimate_tokens()
@@ -57,7 +58,7 @@ async def run_turn(session: Session) -> None:
         if after < before:
             session.emit_status(f"\033[33m[compact: {before} → {after} tokens]\033[0m")
 
-        messages = [{"role": "system", "content": system_prompt()}, *session.messages]
+        messages = [{"role": "system", "content": sys_prompt}, *session.messages]
         try:
             resp = cast(
                 ModelResponse,

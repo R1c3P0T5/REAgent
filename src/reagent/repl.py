@@ -1,26 +1,77 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import signal
+import sys
 
 from reagent.session import Session
 from reagent.session.turn import run_turn
+
+
+async def _get_input(prompt: str) -> str:
+    """Read one stdin line via add_reader — no blocking thread."""
+    loop = asyncio.get_running_loop()
+    fut: asyncio.Future[str] = loop.create_future()
+    fd = sys.stdin.fileno()
+
+    def _on_readable() -> None:
+        loop.remove_reader(fd)
+        try:
+            data = os.read(fd, 4096)
+        except OSError:
+            if not fut.done():
+                fut.set_exception(EOFError())
+            return
+        if not data:
+            if not fut.done():
+                fut.set_exception(EOFError())
+            return
+        if not fut.done():
+            fut.set_result(data.decode(errors="replace").rstrip("\n\r"))
+
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+    loop.add_reader(fd, _on_readable)
+    try:
+        return await fut
+    except asyncio.CancelledError:
+        loop.remove_reader(fd)
+        raise
 
 
 async def run(session: Session) -> None:
     loop = asyncio.get_running_loop()
     while True:
         try:
-            prompt = await loop.run_in_executor(None, lambda: input("\033[36m> \033[0m"))
-        except (EOFError, KeyboardInterrupt):
+            prompt = await _get_input("\033[36m> \033[0m")
+        except EOFError:
             break
 
-        if prompt.strip().lower() in ("/quit", "/exit"):
+        stripped = prompt.strip()
+        if not stripped:
+            continue
+
+        if stripped.lower() in ("/quit", "/exit"):
             break
 
         session.add_user(prompt)
-        await run_turn(session)
+
+        turn_task = asyncio.create_task(run_turn(session))
+        loop.add_signal_handler(signal.SIGINT, turn_task.cancel)
+
+        try:
+            await turn_task
+        except asyncio.CancelledError:
+            session.emit_status("\033[33m■ Conversation interrupted\033[0m")
+        finally:
+            loop.remove_signal_handler(signal.SIGINT)
+
         print()
 
 
 def start(session: Session) -> None:
-    asyncio.run(run(session))
+    try:
+        asyncio.run(run(session))
+    except KeyboardInterrupt:
+        print()
