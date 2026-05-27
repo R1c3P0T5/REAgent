@@ -4,6 +4,8 @@ import json
 from collections.abc import Callable
 from typing import Any, Literal, TypedDict
 
+from reagent.protocol import OutputSink, TerminalSink
+
 TOKEN_LIMIT = 60_000
 
 
@@ -33,7 +35,8 @@ Message = UserMessage | AssistantMessage | AssistantToolCallMessage | ToolMessag
 
 
 class Session:
-    def __init__(self) -> None:
+    def __init__(self, sink: OutputSink | None = None) -> None:
+        self._sink: OutputSink = sink if sink is not None else TerminalSink()
         self._history: list[Message] = []
         self.llm_calls = 0
         self.prompt_tokens = 0
@@ -56,11 +59,11 @@ class Session:
     def add_assistant(self, content: str) -> None:
         self._history.append(AssistantMessage(role="assistant", content=content))
         if content:
-            print(f"\n{content}")
+            self._sink.on_assistant(content)
 
     def add_think(self, content: str) -> None:
         self._history.append(AssistantMessage(role="assistant", content=content))
-        print(f"\n\033[90m{content}\033[0m")
+        self._sink.on_think(content)
 
     def add_tool_calls(self, raw_message: Any) -> None:
         self._history.append(
@@ -74,7 +77,13 @@ class Session:
 
     def add_tool_result(self, tool_call_id: str, content: str) -> None:
         self._history.append(ToolMessage(role="tool", tool_call_id=tool_call_id, content=content))
-        print(f"\033[90m{content}\033[0m")
+        self._sink.on_tool_result(tool_call_id, content)
+
+    def emit_tool_call(self, name: str, args: dict) -> None:
+        self._sink.on_tool_call(name, args)
+
+    def emit_status(self, msg: str) -> None:
+        self._sink.on_status(msg)
 
     def record_usage(self, usage: Any) -> None:
         if usage is None:
@@ -90,7 +99,7 @@ class Session:
         if self._estimate_tokens() <= TOKEN_LIMIT:
             return
 
-        print(f"[!] compacting ... ({self._estimate_tokens()})\n")
+        self._sink.on_status(f"[!] compacting ... ({self._estimate_tokens()})\n")
         turn_starts = [i for i, m in enumerate(self._history) if m["role"] == "user"]
         if len(turn_starts) < 2:
             self.truncate()
