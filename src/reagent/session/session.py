@@ -99,7 +99,7 @@ class Session:
         if self._estimate_tokens() <= TOKEN_LIMIT:
             return
 
-        self._sink.on_status(f"[!] compacting ... ({self._estimate_tokens()})\n")
+        self.emit_status(f"[!] compacting ... ({self._estimate_tokens()})\n")
         turn_starts = [i for i, m in enumerate(self._history) if m["role"] == "user"]
         if len(turn_starts) < 2:
             self.truncate()
