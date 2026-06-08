@@ -45,6 +45,20 @@ def discover_skills(paths: list[str], enabled: bool = True) -> list[SkillMetadat
     return sorted(skills, key=lambda skill: skill.name.lower())
 
 
+def substitute_arguments(body: str, args: str) -> str:
+    return body.replace("$ARGUMENTS", args)
+
+
+def skill_body(content: SkillContent) -> str:
+    text = content.body
+    if not text.startswith("---"):
+        return text
+    end = text.find("---", 3)
+    if end == -1:
+        return text
+    return text[end + 3:].lstrip("\n")
+
+
 def find_skill(name: str, skills: Sequence[SkillMetadata]) -> SkillMetadata | None:
     for skill in skills:
         if skill.name == name:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from reagent.skills import discover_skills, find_skill, read_skill
+from reagent.skills import discover_skills, find_skill, read_skill, substitute_arguments
 
 
 def write_skill(path: Path, text: str) -> Path:
@@ -240,3 +240,23 @@ description: Analyze PE files.
         assert "outside configured skill root" in str(exc)
     else:
         raise AssertionError("read_skill should reject a replaced symlink outside the skill root")
+
+
+def test_substitute_arguments_replaces_placeholder():
+    body = "Analyze $ARGUMENTS for vulnerabilities."
+    assert substitute_arguments(body, "target.exe") == "Analyze target.exe for vulnerabilities."
+
+
+def test_substitute_arguments_replaces_all_occurrences():
+    body = "Target: $ARGUMENTS\nFile: $ARGUMENTS"
+    assert substitute_arguments(body, "foo.bin") == "Target: foo.bin\nFile: foo.bin"
+
+
+def test_substitute_arguments_empty_args():
+    body = "Run analysis on $ARGUMENTS"
+    assert substitute_arguments(body, "") == "Run analysis on "
+
+
+def test_substitute_arguments_no_placeholder():
+    body = "Run standard analysis workflow."
+    assert substitute_arguments(body, "target.exe") == "Run standard analysis workflow."
