@@ -4,8 +4,10 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
 from reagent.results import ToolResult
+from reagent.skills import SkillMetadata
 from reagent.tools.base import Tool
 from reagent.tools.edit_file import EditFileTool
+from reagent.tools.load_skill import LoadSkillTool
 from reagent.tools.read_file import ReadFileTool
 from reagent.tools.shell import ShellTool
 from reagent.tools.task import (
@@ -42,6 +44,7 @@ SILENT_TOOL_NAMES: frozenset[str] = frozenset(t.name for t in _TASK_SCHEMA_TOOLS
 def _as_async(fn: Callable[[dict[str, Any]], Any]) -> AsyncHandler:
     async def wrapper(params: dict[str, Any]) -> ToolResult:
         return await asyncio.to_thread(fn, params)
+
     return wrapper
 
 
@@ -56,6 +59,13 @@ def make_task_handlers(registry: TaskRegistry) -> dict[str, AsyncHandler]:
     return {t.name: _as_async(t.run) for t in [cls(registry) for cls in _TASK_TOOL_CLASSES]}
 
 
+def build_tool_objects(skills: list[SkillMetadata] | None = None) -> list[Tool]:
+    tools = list(_BASE_TOOLS + _TASK_SCHEMA_TOOLS)
+    if skills:
+        tools.append(LoadSkillTool(skills))
+    return tools
+
+
 def register_tools(extra: Sequence[Tool]) -> None:
     for t in extra:
         TOOLS.append(t.to_schema())
@@ -65,7 +75,14 @@ def register_tools(extra: Sequence[Tool]) -> None:
 
 
 __all__ = [
-    "Tool", "TOOLS", "TOOLS_BY_NAME", "AsyncHandler",
-    "BASE_TOOL_HANDLERS", "EXTRA_HANDLERS", "SILENT_TOOL_NAMES",
-    "make_task_handlers", "register_tools",
+    "Tool",
+    "TOOLS",
+    "TOOLS_BY_NAME",
+    "AsyncHandler",
+    "BASE_TOOL_HANDLERS",
+    "EXTRA_HANDLERS",
+    "SILENT_TOOL_NAMES",
+    "build_tool_objects",
+    "make_task_handlers",
+    "register_tools",
 ]

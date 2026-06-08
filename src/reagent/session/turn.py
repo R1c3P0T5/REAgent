@@ -19,6 +19,8 @@ from reagent.session.prompt import system_prompt  # noqa: E402
 from reagent.session.recorder import to_provider_message  # noqa: E402
 from reagent.session.session import Session  # noqa: E402
 from reagent.tools import TOOLS  # noqa: E402
+from reagent.skills import SkillMetadata  # noqa: E402
+from reagent.tools.load_skill import LoadSkillTool  # noqa: E402
 
 
 def _consume_done(task: asyncio.Task[Any]) -> None:
@@ -66,11 +68,21 @@ def to_provider_messages(messages: tuple[Mapping[str, Any], ...]) -> list[dict[s
     return [to_provider_message(message) for message in messages]
 
 
-async def run_turn(session: Session, config: Config) -> None:
+async def run_turn(session: Session, config: Config, skills: list[SkillMetadata] | None = None) -> None:
     compact_fn = make_compact_fn(
         config.llm.model
     )  # TODO: make_compact_fn should use acompletion; sync call blocks event loop
     sys_prompt = system_prompt()
+    tools = list(TOOLS)
+    tool_handlers = dict(session.tool_handlers)
+    if skills:
+        load_skill_tool = LoadSkillTool(skills)
+        tools.append(load_skill_tool.to_schema())
+
+        async def load_skill_handler(params: dict[str, Any]):
+            return await asyncio.to_thread(load_skill_tool.run, params)
+
+        tool_handlers[load_skill_tool.name] = load_skill_handler
 
     for _ in range(config.agent.max_turns):
         before = session._estimate_tokens()
@@ -88,7 +100,7 @@ async def run_turn(session: Session, config: Config) -> None:
                 await _call_llm(
                     model=config.llm.model,
                     messages=messages,
-                    tools=TOOLS,
+                    tools=tools,
                     reasoning_effort=config.llm.reasoning_effort,
                     thinking={"type": "enabled", "budget_tokens": config.llm.thinking_budget_tokens},
                     max_retries=10,
@@ -140,7 +152,7 @@ async def run_turn(session: Session, config: Config) -> None:
                 continue
 
             session.emit_tool_call(tc.id, name, tool_input)
-            handler = session.tool_handlers.get(name)
+            handler = tool_handlers.get(name)
             if handler is not None:
                 result = await handler(tool_input)
             else:

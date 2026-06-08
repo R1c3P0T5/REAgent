@@ -10,7 +10,9 @@ from reagent.results import TextResult
 import reagent.session.turn as turn
 from reagent.session import Session, load_session
 from reagent.session.recorder import SessionRecorder, read_entries
+from reagent.skills import SkillMetadata
 from reagent.session.turn import to_provider_messages, run_turn
+from reagent.tools import build_tool_objects
 
 
 def test_run_turn_is_coroutine():
@@ -100,7 +102,7 @@ async def test_run_turn_uses_runtime_config(monkeypatch):
                 {"role": "system", "content": turn.system_prompt()},
                 {"role": "user", "content": "hello"},
             ],
-            "tools": turn.TOOLS,
+            "tools": [t.to_schema() for t in build_tool_objects([])],
             "reasoning_effort": "high",
             "thinking": {"type": "enabled", "budget_tokens": 1234},
             "max_retries": 10,
@@ -256,3 +258,40 @@ async def test_run_turn_tool_cancellation_stops_remaining_tool_calls(monkeypatch
     assert calls == ["cancel_tool"]
     assert session.messages == ({"role": "user", "content": "hello"},)
     assert session.tool_calls == 0
+
+
+async def test_run_turn_exposes_load_skill_tool_when_skills_are_available(monkeypatch, tmp_path):
+    calls = []
+    session = Session()
+    session.add_user("hello")
+    skill_path = tmp_path / "skills" / "binary-triage" / "SKILL.md"
+    skill_path.parent.mkdir(parents=True)
+    skill_path.write_text("---\nname: binary-triage\ndescription: Triage binaries.\n---\n", encoding="utf-8")
+    skills = [
+        SkillMetadata(
+            name="binary-triage",
+            description="Triage binaries.",
+            path=skill_path.resolve(),
+            root=(tmp_path / "skills").resolve(),
+        )
+    ]
+
+    async def fake_call_llm(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            usage=None,
+            choices=[
+                SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(content="done", reasoning_content=""),
+                )
+            ],
+        )
+
+    monkeypatch.setattr(turn, "_call_llm", fake_call_llm)
+    monkeypatch.setattr(turn, "make_compact_fn", lambda model: lambda messages: "")
+
+    await run_turn(session, _test_config(), skills=skills)
+
+    tool_names = [tool["function"]["name"] for tool in calls[0]["tools"]]
+    assert "load_skill" in tool_names
