@@ -28,7 +28,7 @@ from rich.style import Style as RichStyle
 from reagent.compact import make_compact_fn
 from reagent.config import Config
 from reagent.constants import CLI_NAME
-from reagent.mcp import MCPManager, build_mcp_tools
+from reagent.mcp import MCPClient, build_mcp_tools
 from reagent.mcp.types import ServerSpec
 from reagent.rendering import (
     ASSISTANT_BULLET_STYLE,
@@ -663,7 +663,7 @@ async def run(session: Session, config: Config) -> None:
             if interrupted:
                 _set_status("■ Conversation interrupted")
 
-    async with MCPManager(_mcp_specs(config), emit=session.emit_status) as mcp:
+    async with MCPClient(_mcp_specs(config), emit=session.emit_status) as mcp:
         register_tools(build_mcp_tools(mcp))
         process_task = asyncio.create_task(_process_turns())
         outbox_task = asyncio.create_task(outbox.run())

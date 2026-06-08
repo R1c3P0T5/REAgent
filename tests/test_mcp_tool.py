@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from reagent.mcp.tool import MCPTool, build_mcp_tools
-from reagent.results import MCPResult
+from reagent.results import TextResult
 
 
 class _StubManager:
@@ -34,10 +34,10 @@ def test_mcptool_exposes_tool_schema():
 
 
 async def test_mcptool_invoke_returns_manager_result():
-    manager: Any = _StubManager(result=MCPResult(content='{"ok": true}'))
+    manager: Any = _StubManager(result=TextResult(content='{"ok": true}'))
     tool = MCPTool("ida__decompile", "d", {}, manager)
     out = await tool.invoke({"address": "0x401000"})
-    assert isinstance(out, MCPResult)
+    assert isinstance(out, TextResult)
     assert out.text == '{"ok": true}'
     assert manager.calls == [("ida__decompile", {"address": "0x401000"})]
 

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
 from reagent.protocol import OutputSink, TerminalSink
-from reagent.results import DiffResult, ErrorResult, ReadResult, ShellResult, ToolResult
+from reagent.results import DiffResult, ErrorResult, ReadResult, ShellResult, TextResult, ToolResult
 from reagent.session.recorder import SessionRecorder, jsonable, read_entries, to_provider_message
 
 TOKEN_LIMIT = 60_000
@@ -247,6 +247,7 @@ _RESULT_REGISTRY: dict[str, type[ToolResult]] = {
     "ReadResult": ReadResult,
     "DiffResult": DiffResult,
     "ErrorResult": ErrorResult,
+    "TextResult": TextResult,
 }
 
 
