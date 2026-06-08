@@ -8,6 +8,7 @@ class ServerSpec:
     name: str
     url: str
     headers: dict[str, str] = field(default_factory=dict)
+    headers_command: str | None = None
     allow: tuple[str, ...] | None = None
     connect_timeout: float = 10.0
     call_timeout: float = 60.0

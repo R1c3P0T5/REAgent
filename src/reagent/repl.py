@@ -301,7 +301,11 @@ def _mcp_specs(config: Config) -> list[ServerSpec]:
     specs: list[ServerSpec] = []
     for name, server in config.mcp.servers.items():
         if server.enabled and server.transport == "http" and server.url:
-            specs.append(ServerSpec(name=name, url=server.url, headers=server.headers))
+            specs.append(
+                ServerSpec(
+                    name=name, url=server.url, headers=server.headers, headers_command=server.headers_command
+                )
+            )
     return specs
 
 
