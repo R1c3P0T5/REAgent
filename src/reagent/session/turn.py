@@ -18,7 +18,7 @@ from reagent.results import ErrorResult, ToolResult  # noqa: E402
 from reagent.session.prompt import system_prompt  # noqa: E402
 from reagent.session.recorder import to_provider_message  # noqa: E402
 from reagent.session.session import Session  # noqa: E402
-from reagent.tools import TOOLS, TOOLS_BY_NAME  # noqa: E402
+from reagent.tools import TOOLS, TOOLS_BY_NAME, TOOL_HANDLERS  # noqa: E402
 
 
 def _consume_done(task: asyncio.Task[Any]) -> None:
@@ -67,7 +67,9 @@ def to_provider_messages(messages: tuple[Mapping[str, Any], ...]) -> list[dict[s
 
 
 async def run_turn(session: Session, config: Config) -> None:
-    compact_fn = make_compact_fn(config.llm.model)  # TODO: make_compact_fn should use acompletion; sync call blocks event loop
+    compact_fn = make_compact_fn(
+        config.llm.model
+    )  # TODO: make_compact_fn should use acompletion; sync call blocks event loop
     sys_prompt = system_prompt()
 
     for _ in range(config.agent.max_turns):
