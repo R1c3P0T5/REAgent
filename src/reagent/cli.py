@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+import functools
 import getpass
 import os
 from typing import Annotated, Any
@@ -31,6 +32,7 @@ providers_app = typer.Typer(
 app.add_typer(providers_app, name="providers")
 
 
+@functools.cache
 def load_runtime_env() -> None:
     from dotenv import find_dotenv, load_dotenv
 
@@ -92,8 +94,6 @@ def completion(shell: CompletionShell) -> None:
 
 @providers_app.command("list")
 def list_providers() -> None:
-    load_runtime_env()
-
     from reagent.config import load_layers
 
     layers = load_layers()
@@ -107,8 +107,6 @@ def login(
     provider: str,
     key: Annotated[str | None, typer.Option(help="API key to store; prompts when omitted")] = None,
 ) -> None:
-    load_runtime_env()
-
     from reagent.config import set_provider_key
 
     set_provider_key(provider, key or getpass.getpass(f"{provider} API key: "))
@@ -117,8 +115,6 @@ def login(
 
 @providers_app.command()
 def logout(provider: str) -> None:
-    load_runtime_env()
-
     from reagent.config import remove_provider_key
 
     remove_provider_key(provider)
