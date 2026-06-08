@@ -4,6 +4,7 @@ import json
 import re
 import textwrap
 import time
+from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -12,6 +13,7 @@ from rich.console import Console, Group
 from rich.panel import Panel
 
 if TYPE_CHECKING:
+    from reagent.config import Config
     from reagent.session.session import Session
 from rich.live import Live
 from rich.markdown import Markdown
@@ -115,6 +117,21 @@ def _display_directory(path: Path) -> str:
         directory = str(relative) if parts else ""
 
     return f"{prefix}/{directory}" if prefix and directory else prefix or directory
+
+
+def _progress_bar(*, used: int, limit: int, width: int = 20) -> Text:
+    used_pct = min(1.0, used / limit) if limit else 0
+    filled = round(used_pct * width)
+
+    bar = Text()
+    bar.append("█" * filled)
+    bar.append("░" * (width - filled), style="dim")
+    return bar
+
+
+def _role_counts(session: Session) -> str:
+    counts = Counter(m["role"] for m in session.messages)
+    return f"{len(session.messages):,}  user={counts['user']:,}  assistant={counts['assistant']:,}  tool={counts['tool']:,}"
 
 
 class RichRenderer:
@@ -373,38 +390,58 @@ class RichRenderer:
             self._clip_lines(text), bullet_style=Style.parse("red"), content_style="reagent.error"
         )
 
-    def status_panel(self, session: Session) -> None:
+    def status_panel(self, session: Session, config: Config) -> None:
         ctx = session.context_tokens
         limit = session.token_limit
-        pct = ctx / limit * 100 if limit else 0
-        bar_w = 20
-        filled = round(ctx / limit * bar_w) if limit else 0
+        left = max(0, limit - ctx)
+        left_pct = left / limit * 100 if limit else 0
 
-        bar = Text()
-        bar.append("█" * filled)
-        bar.append("░" * (bar_w - filled), style="dim")
-        bar.append(f"  {ctx:,} / {limit:,}  ({pct:.0f}%)")
+        context = _progress_bar(used=ctx, limit=limit)
+        context.append(f"  {left_pct:.0f}% left ({ctx:,} used / {limit:,})")
         if session.is_compacted:
-            bar.append("  compacted", style="dim")
+            context.append("  compacted", style="dim")
 
-        grid = Table.grid(padding=(0, 2))
+        cached = f"  cached={session.cached_tokens:,}" if session.cached_tokens else ""
+        reasoning = f"  reasoning={session.reasoning_tokens:,}" if session.reasoning_tokens else ""
+        usage = (
+            f"{session.total_tokens:,} total  input={session.prompt_tokens:,}  "
+            f"output={session.completion_tokens:,}{cached}{reasoning}"
+        )
+
+        recorder = getattr(session, "_recorder", None)
+        session_id = getattr(recorder, "session_id", None) or "none"
+        session_path = getattr(recorder, "path", None)
+        model = config.llm.model
+
+        grid = Table.grid(padding=(0, 1))
         grid.add_column(style="dim", no_wrap=True)
-        grid.add_column(no_wrap=True)
+        grid.add_column()
+
+        title = Text.assemble(
+            (">_ ", "dim"),
+            ("REAgent", "text"),
+            (f" v{_client_version()}", "dim"),
+        )
+        grid.add_row(title, "")
+        grid.add_row("", "")
+        grid.add_row("Model", model)
+        grid.add_row("Directory", _display_directory(Path.cwd()))
+        grid.add_row("Session", str(session_id))
+        if session_path is not None:
+            grid.add_row("Session file", _display_directory(Path(session_path)))
+        grid.add_row("", "")
+        grid.add_row("Messages", _role_counts(session))
 
         grid.add_row(
             "Turns",
-            f"{session.turns:,}    LLM calls  {session.llm_calls:,}    Tool calls  {session.tool_calls:,}",
+            f"{session.turns:,}  LLM calls={session.llm_calls:,}  tool calls={session.tool_calls:,}",
         )
-        cached = f"  (+ {session.cached_tokens:,} cached)" if session.cached_tokens else ""
-        reasoning = f"  reasoning {session.reasoning_tokens:,}" if session.reasoning_tokens else ""
-        grid.add_row(
-            "Tokens",
-            f"{session.total_tokens:,}  in={session.prompt_tokens:,}  out={session.completion_tokens:,}{cached}{reasoning}",
-        )
-        grid.add_row("Context", bar)
+        grid.add_row("Token usage", usage)
+        grid.add_row("Context window", context)
 
         self.console.print()
-        self.console.print(Panel(grid, title="Status", box=rich_box.ROUNDED, padding=(0, 1), expand=False))
+        self.console.print(Panel(grid, box=rich_box.ROUNDED, border_style="dim", padding=(0, 1), expand=False))
+        self.console.print()
 
     def prompt(self, text: str) -> None:
         self.console.print(Text(text, style="reagent.prompt"), end="")

@@ -602,7 +602,7 @@ async def run(session: Session, config: Config) -> None:
                 return
             if route.action == "handled":
                 if route.render == "panel":
-                    outbox.submit(lambda: terminal_renderer.status_panel(session))
+                    outbox.submit(lambda: terminal_renderer.status_panel(session, config))
                 elif route.message:
                     render_fn = {
                         "error": terminal_renderer.error,
