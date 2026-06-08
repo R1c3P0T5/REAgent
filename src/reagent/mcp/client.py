@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import subprocess
 from collections.abc import Callable
 from contextlib import AsyncExitStack, suppress
 from dataclasses import dataclass
@@ -23,6 +25,21 @@ class _Entry:
     tool: str
     input_schema: dict[str, Any]
     description: str
+
+
+def _run_headers_cmd(command: str, timeout: float = 10.0) -> dict[str, str]:
+    """Run a shell command and parse its stdout as a JSON object of header key/values.
+
+    For servers whose token rotates out-of-band (e.g. written to a local file on each
+    restart). Runs fresh on every connection; the value is never stored.
+    """
+    proc = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=timeout)
+    if proc.returncode != 0:
+        raise RuntimeError(f"headers_command failed ({proc.returncode}): {proc.stderr.strip()}")
+    data = json.loads(proc.stdout)
+    if not isinstance(data, dict) or not all(isinstance(v, str) for v in data.values()):
+        raise ValueError("headers_command must output a JSON object of string values")
+    return data
 
 
 class MCPClient:
@@ -74,10 +91,13 @@ class MCPClient:
         self._emit(f"[mcp] {spec.name}: {count} tool(s) ready")
 
     async def _open(self, spec: ServerSpec, stack: AsyncExitStack) -> tuple[ClientSession, list[Tool]]:
+        headers = dict(spec.headers)
+        if spec.headers_command:
+            headers.update(await asyncio.to_thread(_run_headers_cmd, spec.headers_command, spec.connect_timeout))
         read, write, _ = await stack.enter_async_context(
             streamablehttp_client(
                 spec.url,
-                headers=dict(spec.headers),
+                headers=headers,
                 timeout=timedelta(seconds=spec.connect_timeout),
             )
         )

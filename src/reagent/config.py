@@ -71,6 +71,7 @@ class MCPServerConfig:
     headers: dict[str, str]
     args: list[str]
     env: dict[str, str]
+    headers_command: str | None = None
 
 
 @dataclass(frozen=True)
@@ -356,7 +357,10 @@ def _validate_mcp(value: Any, path: Path) -> None:
         key_prefix = f"mcp.servers.{name}"
         server_table = _require_table(server, _key(path, key_prefix))
         _reject_unknown(
-            server_table, {"enabled", "transport", "command", "args", "env", "url", "headers"}, path, key_prefix
+            server_table,
+            {"enabled", "transport", "command", "args", "env", "url", "headers", "headers_command"},
+            path,
+            key_prefix,
         )
         _optional_bool(server_table, "enabled", path, f"{key_prefix}.enabled")
         _optional_string(server_table, "transport", path, f"{key_prefix}.transport")
@@ -365,6 +369,7 @@ def _validate_mcp(value: Any, path: Path) -> None:
         _optional_string_list(server_table, "args", path, f"{key_prefix}.args")
         _optional_string_table(server_table, "env", path, f"{key_prefix}.env")
         _optional_string_table(server_table, "headers", path, f"{key_prefix}.headers")
+        _optional_string(server_table, "headers_command", path, f"{key_prefix}.headers_command")
 
 
 def _validate_skills(value: Any, path: Path) -> None:
@@ -431,6 +436,7 @@ def _to_mcp_server(name: str, data: dict[str, Any], path: str) -> MCPServerConfi
         headers=dict(data.get("headers", {})),
         args=list(data.get("args", [])),
         env=dict(data.get("env", {})),
+        headers_command=data.get("headers_command"),
     )
 
 

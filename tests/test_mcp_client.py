@@ -4,7 +4,9 @@ import asyncio
 import json
 from typing import Any
 
-from reagent.mcp.client import MCPClient, _Entry
+import pytest
+
+from reagent.mcp.client import MCPClient, _Entry, _run_headers_cmd
 from reagent.mcp.types import ServerSpec
 from reagent.results import ErrorResult, TextResult
 
@@ -128,3 +130,18 @@ async def test_connect_failure_is_fail_soft():
     spec = ServerSpec(name="dead", url="http://127.0.0.1:1/mcp", connect_timeout=2.0)
     async with MCPClient([spec]) as mcp:
         assert mcp.tool_names == []
+
+
+def test_run_headers_cmd_parses_json_object():
+    out = _run_headers_cmd("""python3 -c "import json; print(json.dumps({'Authorization': 'Bearer xyz'}))" """)
+    assert out == {"Authorization": "Bearer xyz"}
+
+
+def test_run_headers_cmd_raises_on_nonzero_exit():
+    with pytest.raises(RuntimeError):
+        _run_headers_cmd('python3 -c "import sys; sys.exit(3)"')
+
+
+def test_run_headers_cmd_raises_on_non_object_output():
+    with pytest.raises(ValueError):
+        _run_headers_cmd("echo '[1, 2]'")
