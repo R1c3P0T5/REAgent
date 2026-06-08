@@ -15,7 +15,7 @@ def read_jsonl(path):
     return [json.loads(line) for line in path.read_text().splitlines()]
 
 
-def test_recorder_creates_uuid_named_jsonl_under_date_dir(tmp_path, monkeypatch):
+def test_recorder_allocates_uuid_path_without_creating_file(tmp_path, monkeypatch):
     monkeypatch.setattr("reagent.session.recorder.utc_now", lambda: "2026-06-06T12:34:56.789Z")
     monkeypatch.setattr("reagent.session.recorder._client_version", lambda: "9.9.9")
 
@@ -29,24 +29,41 @@ def test_recorder_creates_uuid_named_jsonl_under_date_dir(tmp_path, monkeypatch)
     assert recorder.path.parent == tmp_path / "sessions" / "2026" / "06" / "06"
     assert recorder.path.name == f"{recorder.session_id}.jsonl"
     uuid.UUID(recorder.session_id)
+    assert not recorder.path.exists()
+
+
+def test_recorder_writes_pending_meta_before_first_message(tmp_path, monkeypatch):
+    timestamps = iter(["2026-06-06T12:34:56.789Z", "2026-06-06T12:34:57.000Z"])
+    monkeypatch.setattr("reagent.session.recorder.utc_now", lambda: next(timestamps))
+    monkeypatch.setattr("reagent.session.recorder._client_version", lambda: "9.9.9")
+
+    recorder = SessionRecorder.create(
+        root=tmp_path,
+        cwd="/repo",
+        model="test-model",
+        python_version="3.test",
+    )
+
+    recorder.record_message({"role": "user", "content": "hello"})
 
     entries = read_jsonl(recorder.path)
-    assert entries == [
-        {
-            "version": 1,
-            "seq": 0,
-            "timestamp": "2026-06-06T12:34:56.789Z",
-            "session_id": recorder.session_id,
-            "type": "meta",
-            "data": {
-                "created_at": "2026-06-06T12:34:56.789Z",
-                "cwd": "/repo",
-                "model": "test-model",
-                "client": {"name": "reagent", "version": "9.9.9"},
-                "python_version": "3.test",
-            },
-        }
-    ]
+    assert entries[0] == {
+        "version": 1,
+        "seq": 0,
+        "timestamp": "2026-06-06T12:34:56.789Z",
+        "session_id": recorder.session_id,
+        "type": "meta",
+        "data": {
+            "created_at": "2026-06-06T12:34:56.789Z",
+            "cwd": "/repo",
+            "model": "test-model",
+            "client": {"name": "reagent", "version": "9.9.9"},
+            "python_version": "3.test",
+        },
+    }
+    assert entries[1]["seq"] == 1
+    assert entries[1]["type"] == "message"
+    assert entries[1]["data"]["role"] == "user"
 
 
 def test_recorder_writes_message_usage_and_compact_entries(tmp_path, monkeypatch):
@@ -190,6 +207,7 @@ def test_to_provider_message_strips_local_ids_without_mutating_original():
 
 def test_find_file_accepts_path_or_uuid_scan(tmp_path):
     recorder = SessionRecorder.create(root=tmp_path, cwd="/repo", model="model")
+    recorder.record_message({"role": "user", "content": "hello"})
 
     assert find_file(str(recorder.path), root=tmp_path) == recorder.path
     assert find_file(recorder.session_id, root=tmp_path) == recorder.path
