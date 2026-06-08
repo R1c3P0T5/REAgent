@@ -33,10 +33,10 @@ def test_mcptool_exposes_tool_schema():
     assert schema["function"]["parameters"]["properties"]["address"]["type"] == "string"
 
 
-async def test_mcptool_invoke_returns_manager_result():
+async def test_mcptool_run_returns_manager_result():
     manager: Any = _StubManager(result=TextResult(content='{"ok": true}'))
     tool = MCPTool("ida__decompile", "d", {}, manager)
-    out = await tool.invoke({"address": "0x401000"})
+    out = await tool.run({"address": "0x401000"})
     assert isinstance(out, TextResult)
     assert out.text == '{"ok": true}'
     assert manager.calls == [("ida__decompile", {"address": "0x401000"})]

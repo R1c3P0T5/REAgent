@@ -38,17 +38,18 @@ class _FakeTool(Tool):
     def parameters(self) -> dict[str, Any]:
         return {"type": "object", "properties": {}}
 
-    def run(self, params: dict[str, Any]) -> ToolResult:
+    async def run(self, params: dict[str, Any]) -> ToolResult:
         return ErrorResult("noop")
 
 
-def test_register_tools_adds_schema_and_handler(restore_tools):
+async def test_register_tools_adds_schema_and_handler(restore_tools):
     before = len(tools_mod.TOOLS)
     tools_mod.register_tools([_FakeTool()])
     assert len(tools_mod.TOOLS) == before + 1
     assert tools_mod.TOOLS[-1]["function"]["name"] == "fake__ping"
     assert "fake__ping" in tools_mod.TOOLS_BY_NAME
-    assert tools_mod.TOOLS_BY_NAME["fake__ping"].run({}).text == "noop"
+    result = await tools_mod.TOOLS_BY_NAME["fake__ping"].run({})
+    assert result.text == "noop"
 
 
 def test_mcp_specs_selects_enabled_http_servers_with_url(tmp_path):
