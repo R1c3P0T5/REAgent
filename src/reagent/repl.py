@@ -43,6 +43,7 @@ from reagent.results import ErrorResult, ToolResult
 from reagent.session import Session
 from reagent.tools.task import fmt_tree_lines
 from reagent.session.turn import run_turn
+from reagent.skills import discover_skills
 from reagent.slash_commands import SlashCommand, SlashRender, SlashResult, completions, dispatch
 from reagent.tools import EXTRA_HANDLERS, register_tools
 
@@ -243,7 +244,8 @@ def _route_slash_result(user_input: str, result: SlashResult) -> _SlashRoute:
     if result.outcome == "not_slash":
         return _SlashRoute(action="submit", prompt=user_input)
     if result.outcome == "submit_prompt":
-        return _SlashRoute(action="submit", prompt=result.prompt)
+        message = f"/{result.command_name}" if result.command_name else ""
+        return _SlashRoute(action="submit", prompt=result.prompt, message=message)
     if result.outcome == "exit":
         return _SlashRoute(action="exit")
     # covers "handled" and "unknown"
@@ -339,6 +341,7 @@ async def run(session: Session, config: Config) -> None:
     state = _ReplState()
     calls = _PendingCalls()
     outbox = _Outbox()
+    skills = discover_skills(config.skills.paths, enabled=config.skills.enabled)
 
     def _invalidate() -> None:
         if output_app is not None:
@@ -497,7 +500,7 @@ async def run(session: Session, config: Config) -> None:
     def _update_completions(_buf: Buffer) -> None:
         text = _buf.text
         if text.startswith("/") and " " not in text and "\n" not in text:
-            cmds = list(completions(text))
+            cmds = list(completions(text, skills=skills))
             if cmds != state.slash_cmds:
                 state.slash_cmds = cmds
                 state.slash_idx = 0
@@ -661,7 +664,7 @@ async def run(session: Session, config: Config) -> None:
                 output_app.exit()
                 return
 
-            route = _route_slash_result(user_input, dispatch(user_input, session, compact_fn=compact_fn))
+            route = _route_slash_result(user_input, dispatch(user_input, session, compact_fn=compact_fn, skills=skills))
             if route.action == "exit":
                 output_app.exit()
                 return
@@ -678,11 +681,11 @@ async def run(session: Session, config: Config) -> None:
                 continue
 
             user_input = route.prompt
-            session.emit_user(user_input)
+            session.emit_user(route.message or user_input)
             await outbox.drain()
             session.add_user(user_input)
 
-            turn_task = asyncio.create_task(run_turn(session, config))
+            turn_task = asyncio.create_task(run_turn(session, config, skills=skills))
             state.active_turn = turn_task
             loop.add_signal_handler(signal.SIGINT, turn_task.cancel)
             state.thinking_at = time.monotonic()

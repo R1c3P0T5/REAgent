@@ -168,7 +168,9 @@ def load_layers(
     effective_env = os.environ if env is None else env
     base_dir = Path.cwd() if cwd is None else Path(cwd)
 
+    reagent_home = Path(effective_env.get(HOME_ENV_VAR, DEFAULT_HOME_DIR)).expanduser()
     layer_list = [Layer("defaults", None, copy.deepcopy(DEFAULTS))]
+    layer_list.append(Layer("home", None, {"skills": {"paths": [str(reagent_home / "skills")]}}))
     layer_list.extend(_file_layers(base_dir, effective_env, extra_config_paths))
     if model_id := effective_env.get("MODEL_ID"):
         layer_list.append(Layer("env", None, {"llm": {"model": model_id}}))
