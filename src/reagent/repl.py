@@ -282,9 +282,6 @@ def _exit_usage(session: Session) -> _ExitUsage | None:
     )
 
 
-def _print_usage(renderer: RichRenderer, text: str, *, resume_command: str | None = None) -> None:
-    renderer.exit_usage(text, resume_command=resume_command)
-
 
 def _make_app(*, layout: Layout | None, key_bindings: KeyBindingsBase | None) -> Application[None]:
     return Application(
@@ -670,7 +667,7 @@ async def run(session: Session, config: Config) -> None:
         await asyncio.gather(outbox_task, return_exceptions=True)
         exit_usage = _exit_usage(session)
         if exit_usage is not None:
-            _print_usage(terminal_renderer, exit_usage.usage, resume_command=exit_usage.resume_command)
+            terminal_renderer.exit_usage(exit_usage.usage, resume_command=exit_usage.resume_command)
 
 
 def start(session: Session, config: Config) -> None:

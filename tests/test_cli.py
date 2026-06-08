@@ -37,7 +37,7 @@ def test_importing_cli_does_not_load_repl_or_litellm():
     assert result.stdout.splitlines() == ["False", "False", "False", "False", "False", "False"]
 
 
-def test_build_session_creates_recorder_under_reagent_home(tmp_path, monkeypatch):
+def test_build_session_allocates_recorder_without_creating_file(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("REAGENT_HOME", str(tmp_path))
     monkeypatch.setenv("MODEL_ID", "test-model")
@@ -45,7 +45,7 @@ def test_build_session_creates_recorder_under_reagent_home(tmp_path, monkeypatch
     session = build_session()
 
     assert session._recorder is not None
-    assert session._recorder.path.is_file()
+    assert not session._recorder.path.exists()
     assert session._recorder.path.is_relative_to(tmp_path / "sessions")
 
 
@@ -75,9 +75,10 @@ def test_build_session_records_config_model(tmp_path, monkeypatch):
     )
 
     session = build_session()
+    session.add_user("hello")
 
     assert session._recorder is not None
-    [meta_line] = session._recorder.path.read_text(encoding="utf-8").splitlines()
+    meta_line = session._recorder.path.read_text(encoding="utf-8").splitlines()[0]
     assert json.loads(meta_line)["data"]["model"] == "test-config-model"
 
 

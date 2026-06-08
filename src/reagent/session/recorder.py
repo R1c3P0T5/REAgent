@@ -125,6 +125,7 @@ class SessionRecorder:
         self._seq = seq
         self._last_message_id: str | None = None
         self._dir_ensured = False
+        self._pending_meta: dict[str, Any] | None = None
 
     @classmethod
     def create(
@@ -143,17 +144,13 @@ class SessionRecorder:
         path = data_root / "sessions" / date[0] / date[1] / date[2] / f"{session_id}.jsonl"
 
         recorder = cls(path=path, session_id=session_id, seq=0)
-        recorder._write(
-            "meta",
-            {
-                "created_at": created_at,
-                "cwd": cwd,
-                "model": model,
-                "client": {"name": APP_PACKAGE_NAME, "version": _client_version()},
-                "python_version": python_version if python_version is not None else sys.version.split()[0],
-            },
-            ts=created_at,
-        )
+        recorder._pending_meta = {
+            "created_at": created_at,
+            "cwd": cwd,
+            "model": model,
+            "client": {"name": APP_PACKAGE_NAME, "version": _client_version()},
+            "python_version": python_version if python_version is not None else sys.version.split()[0],
+        }
         return recorder
 
     @classmethod
@@ -227,7 +224,32 @@ class SessionRecorder:
             },
         )
 
+    def _flush_pending_meta(self) -> None:
+        if self._pending_meta is None:
+            return
+        
+        meta_data = self._pending_meta
+        self._pending_meta = None
+        if not self._dir_ensured:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._dir_ensured = True
+
+        entry: SessionEntry = {
+            "version": 1,
+            "seq": self._seq,
+            "timestamp": meta_data["created_at"],
+            "session_id": self.session_id,
+            "type": "meta",
+            "data": meta_data,
+        }
+        
+        with self.path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry, separators=(",", ":"), ensure_ascii=False) + "\n")
+        self._seq += 1
+
     def _write(self, event_type: EventType, data: dict[str, Any], ts: str | None = None) -> SessionEntry:
+        self._flush_pending_meta()
+
         if not self._dir_ensured:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self._dir_ensured = True
