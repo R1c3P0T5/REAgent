@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,6 +11,14 @@ class SkillMetadata:
     description: str
     path: Path
     root: Path
+
+
+@dataclass(frozen=True)
+class SkillContent:
+    name: str
+    description: str
+    path: Path
+    body: str
 
 
 def discover_skills(paths: list[str], enabled: bool = True) -> list[SkillMetadata]:
@@ -29,6 +38,27 @@ def discover_skills(paths: list[str], enabled: bool = True) -> list[SkillMetadat
                 skills.append(metadata)
 
     return sorted(skills, key=lambda skill: skill.name.lower())
+
+
+def find_skill(name: str, skills: Sequence[SkillMetadata]) -> SkillMetadata | None:
+    for skill in skills:
+        if skill.name == name:
+            return skill
+    return None
+
+
+def read_skill(skill: SkillMetadata) -> SkillContent:
+    path = skill.path.resolve()
+    root = skill.root.resolve()
+    if not path.is_relative_to(root):
+        raise PermissionError(f"Skill path '{path}' is outside configured skill root '{root}'")
+
+    return SkillContent(
+        name=skill.name,
+        description=skill.description,
+        path=path,
+        body=path.read_text(encoding="utf-8"),
+    )
 
 
 def _skill_root(path: Path) -> Path:
