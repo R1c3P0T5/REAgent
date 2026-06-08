@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from reagent.protocol import SilentSink
 from reagent.session import Session
+from reagent.skills import SkillMetadata
 from reagent.slash_commands import BUILTINS, SlashCommand, dispatch, find, parse
 
 
@@ -140,3 +143,58 @@ def test_dispatch_compact_surfaces_persistence_failure(monkeypatch):
 
     assert result.outcome == "handled"
     assert result.message == "Compact failed: disk full"
+
+def _make_skill(tmp_path: Path, name: str, body: str) -> SkillMetadata:
+    skill_file = tmp_path / name / "SKILL.md"
+    skill_file.parent.mkdir(parents=True)
+    skill_file.write_text(
+        f"---\nname: {name}\ndescription: Test skill.\n---\n\n{body}",
+        encoding="utf-8",
+    )
+    return SkillMetadata(
+        name=name,
+        description="Test skill.",
+        path=skill_file.resolve(),
+        root=tmp_path.resolve(),
+    )
+
+
+def test_dispatch_invokes_skill_as_submit_prompt(tmp_path):
+    skill = _make_skill(tmp_path, "binary-triage", "Run file $ARGUMENTS and sha256sum $ARGUMENTS.")
+    result = dispatch("/binary-triage target.exe", Session(sink=SilentSink()), skills=[skill])
+
+    assert result.outcome == "submit_prompt"
+    assert result.prompt == "Run file target.exe and sha256sum target.exe."
+    assert result.command_name == "binary-triage"
+
+
+def test_dispatch_skill_with_no_arguments(tmp_path):
+    skill = _make_skill(tmp_path, "binary-triage", "Run standard triage.")
+    result = dispatch("/binary-triage", Session(sink=SilentSink()), skills=[skill])
+
+    assert result.outcome == "submit_prompt"
+    assert result.prompt == "Run standard triage."
+
+
+def test_dispatch_unknown_slash_still_unknown_with_skills(tmp_path):
+    skill = _make_skill(tmp_path, "binary-triage", "Triage.")
+    result = dispatch("/missing", Session(sink=SilentSink()), skills=[skill])
+
+    assert result.outcome == "unknown"
+    assert "missing" in result.message
+
+
+def test_completions_includes_skill_names(tmp_path):
+    from reagent.slash_commands import completions
+    skill = _make_skill(tmp_path, "binary-triage", "Triage.")
+    results = completions("/b", skills=[skill])
+    names = [c.name for c in results]
+    assert "binary-triage" in names
+
+
+def test_completions_skill_accepts_args(tmp_path):
+    from reagent.slash_commands import completions
+    skill = _make_skill(tmp_path, "binary-triage", "Triage.")
+    results = completions("/binary", skills=[skill])
+    skill_cmd = next(c for c in results if c.name == "binary-triage")
+    assert skill_cmd.accepts_args is True
