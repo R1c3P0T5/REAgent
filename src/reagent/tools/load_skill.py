@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from reagent.results import ErrorResult, SkillResult, ToolResult
-from reagent.skills import SkillMetadata, resolve_skill_content
+from reagent.skills import SkillMetadata, resolve_skill_content, skill_body
 from reagent.tools.base import MAX_OUTPUT, Tool, params, prop
 
 
@@ -39,7 +39,7 @@ class LoadSkillTool(Tool):
         except OSError as exc:
             return ErrorResult(f"Error: failed to load skill {name!r}: {exc}")
 
-        body = content.body
+        body = skill_body(content)
         if len(body) > MAX_OUTPUT:
             body = body[:MAX_OUTPUT]
             last_newline = body.rfind("\n")
