@@ -86,16 +86,106 @@ async def test_run_turn_uses_runtime_config(monkeypatch):
 
     await run_turn(session, config)
 
-    assert calls == [
-        {
-            "model": "test-model",
-            "messages": [
-                {"role": "system", "content": turn.system_prompt()},
-                {"role": "user", "content": "hello"},
+    assert len(calls) == 1
+    call = calls[0]
+    assert call["model"] == "test-model"
+    assert call["messages"][0]["role"] == "system"
+    assert "You are REAgent" in call["messages"][0]["content"]
+    assert call["messages"][1] == {"role": "user", "content": "hello"}
+    assert call["tools"] == turn.build_tools()
+    assert call["reasoning_effort"] == "high"
+    assert call["thinking"] == {"type": "enabled", "budget_tokens": 1234}
+    assert call["num_retries"] == 10
+
+
+async def test_run_turn_includes_configured_skill_catalog(monkeypatch, tmp_path):
+    skill_path = tmp_path / "skills" / "pe-analysis" / "SKILL.md"
+    skill_path.parent.mkdir(parents=True)
+    skill_path.write_text(
+        """\
+---
+name: pe-analysis
+description: Analyze Windows PE executables, DLLs, drivers, imports, exports, and resources.
+---
+
+# PE Analysis
+""",
+        encoding="utf-8",
+    )
+    calls = []
+    session = Session()
+    session.add_user("analyze sample.exe")
+    config = Config(
+        llm=LLMConfig(
+            model="test-model",
+            reasoning_effort="high",
+            thinking_budget_tokens=1234,
+            models=LLMModelsConfig(available=[]),
+        ),
+        agent=AgentConfig(max_turns=1),
+        providers={},
+        mcp=MCPConfig(servers={}),
+        skills=SkillsConfig(enabled=True, paths=[str(tmp_path / "skills")]),
+    )
+
+    async def fake_call_llm(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            usage=None,
+            choices=[
+                SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(content="done", reasoning_content=""),
+                )
             ],
-            "tools": turn.TOOLS,
-            "reasoning_effort": "high",
-            "thinking": {"type": "enabled", "budget_tokens": 1234},
-            "num_retries": 10,
-        }
-    ]
+        )
+
+    monkeypatch.setattr(turn, "_call_llm", fake_call_llm)
+    monkeypatch.setattr(turn, "make_compact_fn", lambda model: lambda messages: "")
+
+    await run_turn(session, config)
+
+    system_message = calls[0]["messages"][0]["content"]
+    assert "Available skills:" in system_message
+    assert "pe-analysis: Analyze Windows PE executables" in system_message
+    assert str(skill_path.resolve()) not in system_message
+    tool_names = {tool["function"]["name"] for tool in calls[0]["tools"]}
+    assert "load_skill" in tool_names
+
+
+async def test_run_turn_omits_load_skill_tool_without_configured_skills(monkeypatch):
+    calls = []
+    session = Session()
+    session.add_user("hello")
+    config = Config(
+        llm=LLMConfig(
+            model="test-model",
+            reasoning_effort="high",
+            thinking_budget_tokens=1234,
+            models=LLMModelsConfig(available=[]),
+        ),
+        agent=AgentConfig(max_turns=1),
+        providers={},
+        mcp=MCPConfig(servers={}),
+        skills=SkillsConfig(enabled=True, paths=[]),
+    )
+
+    async def fake_call_llm(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            usage=None,
+            choices=[
+                SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(content="done", reasoning_content=""),
+                )
+            ],
+        )
+
+    monkeypatch.setattr(turn, "_call_llm", fake_call_llm)
+    monkeypatch.setattr(turn, "make_compact_fn", lambda model: lambda messages: "")
+
+    await run_turn(session, config)
+
+    tool_names = {tool["function"]["name"] for tool in calls[0]["tools"]}
+    assert "load_skill" not in tool_names

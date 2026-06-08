@@ -18,6 +18,7 @@ from reagent.results import ErrorResult  # noqa: E402
 from reagent.session.prompt import system_prompt  # noqa: E402
 from reagent.session.recorder import to_provider_message  # noqa: E402
 from reagent.session.session import Session  # noqa: E402
+from reagent.skills import discover_skills  # noqa: E402
 from reagent.tools import TOOLS, TOOL_HANDLERS  # noqa: E402
 
 
@@ -68,7 +69,8 @@ def to_provider_messages(messages: tuple[Mapping[str, Any], ...]) -> list[dict[s
 
 async def run_turn(session: Session, config: Config) -> None:
     compact_fn = make_compact_fn(config.llm.model)  # TODO: make_compact_fn should use acompletion; sync call blocks event loop
-    sys_prompt = system_prompt()
+    skills = discover_skills(config.skills.paths, enabled=config.skills.enabled)
+    sys_prompt = system_prompt(skills)
 
     for _ in range(config.agent.max_turns):
         before = session._estimate_tokens()
