@@ -12,6 +12,7 @@ dependencies = [
     "openai>=2.38.0",
     "prompt-toolkit>=3.0.52",
     "rich>=15.0.0",
+    "typer>=0.25.1",
 ]
 
 [dependency-groups]
