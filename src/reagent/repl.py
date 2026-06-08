@@ -23,6 +23,7 @@ from prompt_toolkit.layout.processors import BeforeInput, Processor, Transformat
 from prompt_toolkit.styles import Style as PTStyle
 from rich.console import Console
 from rich.style import Style as RichStyle
+from rich.text import Text
 
 from reagent.compact import make_compact_fn
 from reagent.config import Config
@@ -248,12 +249,42 @@ def _fmt_usage(
     return f"Usage: total={total:,} {input_part} {output_part}"
 
 
-def _fmt_usage_line(text: str) -> str:
-    return f"\n{text}"
+
+def _resume_command(session: Session) -> str | None:
+    recorder = getattr(session, "_recorder", None)
+    session_id = getattr(recorder, "session_id", None)
+    if not isinstance(session_id, str) or not session_id:
+        return None
+    
+    return f"reagent --resume {session_id}"
 
 
-def _print_usage(console: Console, text: str) -> None:
-    console.print(_fmt_usage_line(text), highlight=False)
+@dataclass(frozen=True)
+class _ExitUsage:
+    usage: str
+    resume_command: str | None
+
+
+def _exit_usage(session: Session) -> _ExitUsage | None:
+    if not session.messages:
+        return None
+    
+    return _ExitUsage(
+        usage=_fmt_usage(
+            total=session.total_tokens,
+            input_tokens=session.prompt_tokens,
+            output_tokens=session.completion_tokens,
+            cached_tokens=session.cached_tokens,
+            reasoning_tokens=session.reasoning_tokens,
+        ),
+        resume_command=_resume_command(session),
+    )
+
+
+def _print_usage(console: Console, text: str, *, resume_command: str | None = None) -> None:
+    console.print(Text.assemble(("\n" + text, "dim")), highlight=False)
+    if resume_command is not None:
+        console.print(Text.assemble(("Resume with ", "dim"), (resume_command, "bright_magenta")), highlight=False)
 
 
 def _make_app(*, layout: Layout | None, key_bindings: KeyBindingsBase | None) -> Application[None]:
@@ -270,7 +301,8 @@ def _make_app(*, layout: Layout | None, key_bindings: KeyBindingsBase | None) ->
 async def run(session: Session, config: Config) -> None:
     terminal_console = Console(force_terminal=True, theme=TERMINAL_THEME)
     terminal_renderer = RichRenderer(console=terminal_console, use_live=False)
-    terminal_renderer.startup_banner(config.llm.model)
+    if not session.messages:
+        terminal_renderer.startup_banner(config.llm.model)
     state = _ReplState()
     calls = _PendingCalls()
     outbox = _Outbox()
@@ -627,16 +659,9 @@ async def run(session: Session, config: Config) -> None:
         await outbox.drain()
         outbox.stop()
         await asyncio.gather(outbox_task, return_exceptions=True)
-        _print_usage(
-            terminal_console,
-            _fmt_usage(
-                total=session.total_tokens,
-                input_tokens=session.prompt_tokens,
-                output_tokens=session.completion_tokens,
-                cached_tokens=session.cached_tokens,
-                reasoning_tokens=session.reasoning_tokens,
-            ),
-        )
+        exit_usage = _exit_usage(session)
+        if exit_usage is not None:
+            _print_usage(terminal_console, exit_usage.usage, resume_command=exit_usage.resume_command)
 
 
 def start(session: Session, config: Config) -> None:
