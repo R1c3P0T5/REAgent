@@ -13,7 +13,7 @@ from mcp.client.streamable_http import streamablehttp_client
 from mcp.types import Tool
 
 from reagent.mcp.types import ServerSpec
-from reagent.results import ErrorResult, MCPResult, ToolResult
+from reagent.results import ErrorResult, TextResult, ToolResult
 
 
 @dataclass
@@ -25,14 +25,14 @@ class _Entry:
     description: str
 
 
-class MCPManager:
+class MCPClient:
     def __init__(self, specs: list[ServerSpec], emit: Callable[[str], None] | None = None) -> None:
         self._specs = list(specs)
         self._emit = emit or (lambda _msg: None)
         self._stack = AsyncExitStack()
         self._tools: dict[str, _Entry] = {}
 
-    async def __aenter__(self) -> MCPManager:
+    async def __aenter__(self) -> MCPClient:
         await self._stack.__aenter__()
         for spec in self._specs:
             await self._connect(spec)
@@ -121,4 +121,4 @@ class MCPManager:
             return ErrorResult(f"Error: MCP tool {name!r} timed out after {entry.spec.call_timeout}s")
         except Exception as exc:
             return ErrorResult(f"Error: {exc}")
-        return MCPResult(content=result.model_dump_json())
+        return TextResult(content=result.model_dump_json())

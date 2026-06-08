@@ -4,9 +4,9 @@ import asyncio
 import json
 from typing import Any
 
-from reagent.mcp.client import MCPManager, _Entry
+from reagent.mcp.client import MCPClient, _Entry
 from reagent.mcp.types import ServerSpec
-from reagent.results import ErrorResult, MCPResult
+from reagent.results import ErrorResult, TextResult
 
 
 class _Block:
@@ -44,9 +44,9 @@ class _StubSession:
 
 def _manager_with(
     session: Any, *, tool: str = "decompile", call_timeout: float = 60.0, schema: dict | None = None
-) -> MCPManager:
+) -> MCPClient:
     spec = ServerSpec(name="ida", url="http://x/mcp", call_timeout=call_timeout)
-    m = MCPManager([spec])
+    m = MCPClient([spec])
     m._tools[f"ida__{tool}"] = _Entry(
         spec=spec,
         session=session,
@@ -87,10 +87,10 @@ def test_has_and_tool_names():
     assert m.tool_names == ["ida__decompile"]
 
 
-async def test_call_returns_raw_json_mcpresult():
+async def test_call_returns_raw_json_textresult():
     session = _StubSession(result=_CallResult([_Block("text", "int main() {}")]))
     out = await _manager_with(session).call("ida__decompile", {"address": "0x401000"})
-    assert isinstance(out, MCPResult)
+    assert isinstance(out, TextResult)
     assert "int main() {}" in out.text
     assert '"content"' in out.text
     assert session.calls == [("decompile", {"address": "0x401000"})]
@@ -99,7 +99,7 @@ async def test_call_returns_raw_json_mcpresult():
 async def test_call_server_error_passed_through_as_json():
     session = _StubSession(result=_CallResult([_Block("text", "boom")], isError=True))
     out = await _manager_with(session).call("ida__decompile", {})
-    assert isinstance(out, MCPResult)
+    assert isinstance(out, TextResult)
     assert "boom" in out.text
     assert "isError" in out.text
 
@@ -126,5 +126,5 @@ async def test_call_client_exception_maps_to_error():
 
 async def test_connect_failure_is_fail_soft():
     spec = ServerSpec(name="dead", url="http://127.0.0.1:1/mcp", connect_timeout=2.0)
-    async with MCPManager([spec]) as mcp:
+    async with MCPClient([spec]) as mcp:
         assert mcp.tool_names == []

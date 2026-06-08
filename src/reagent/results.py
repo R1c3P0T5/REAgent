@@ -49,7 +49,7 @@ class ErrorResult:
 
 
 @dataclass
-class MCPResult:
+class TextResult:
     content: str
 
     @property
@@ -57,4 +57,4 @@ class MCPResult:
         return self.content
 
 
-ToolResult: TypeAlias = ShellResult | ReadResult | DiffResult | ErrorResult | MCPResult
+ToolResult: TypeAlias = ShellResult | ReadResult | DiffResult | ErrorResult | TextResult

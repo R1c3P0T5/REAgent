@@ -25,7 +25,7 @@ from rich.theme import Theme
 from rich.text import Text
 
 from reagent.constants import APP_DISPLAY_NAME
-from reagent.results import DiffResult, ErrorResult, MCPResult, ReadResult, ShellResult, ToolResult
+from reagent.results import DiffResult, ErrorResult, TextResult, ReadResult, ShellResult, ToolResult
 from reagent.session.recorder import _client_version
 
 
@@ -234,7 +234,7 @@ class RichRenderer:
                     self._print_diff(diff, path)
                 else:
                     self._print_tree([msg], style="reagent.success")
-            case MCPResult(content=content):
+            case TextResult(content=content):
                 self._print_tree(self._clip_chars(content), style="reagent.guide")
 
     def _print_read(self, content: str, path: str, start_line: int) -> None:
