@@ -41,6 +41,7 @@ from reagent.rendering import (
 )
 from reagent.results import ErrorResult, ToolResult
 from reagent.session import Session
+from reagent.tools.task import fmt_tree_lines, registry as task_registry
 from reagent.session.turn import run_turn
 from reagent.slash_commands import SlashCommand, SlashRender, SlashResult, completions, dispatch
 from reagent.tools import register_tools
@@ -72,6 +73,8 @@ _STYLE = PTStyle.from_dict(
         "completion": "fg:ansibrightblack",
         "completion-selected": "fg:ansibrightmagenta bold",
         "completion-meta": "fg:ansibrightblack",
+        "task": "",
+        "task-guide": "fg:ansibrightmagenta",
     }
 )
 
@@ -96,6 +99,7 @@ class _ReplState:
     last_ctrl_c: float = 0.0
     slash_cmds: list[SlashCommand] = field(default_factory=list)
     slash_idx: int = 0
+    tasks_snapshot: list = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -253,13 +257,12 @@ def _fmt_usage(
     return f"Usage: total={total:,} {input_part} {output_part}"
 
 
-
 def _resume_command(session: Session) -> str | None:
     recorder = getattr(session, "_recorder", None)
     session_id = getattr(recorder, "session_id", None)
     if not isinstance(session_id, str) or not session_id:
         return None
-    
+
     return f"{CLI_NAME} --resume {session_id}"
 
 
@@ -272,7 +275,7 @@ class _ExitUsage:
 def _exit_usage(session: Session) -> _ExitUsage | None:
     if not session.messages:
         return None
-    
+
     return _ExitUsage(
         usage=_fmt_usage(
             total=session.total_tokens,
@@ -283,7 +286,6 @@ def _exit_usage(session: Session) -> _ExitUsage | None:
         ),
         resume_command=_resume_command(session),
     )
-
 
 
 def _make_app(*, layout: Layout | None, key_bindings: KeyBindingsBase | None) -> Application[None]:
@@ -302,11 +304,13 @@ def _mcp_specs(config: Config) -> list[ServerSpec]:
     for name, server in config.mcp.servers.items():
         if server.enabled and server.transport == "http" and server.url:
             specs.append(
-                ServerSpec(
-                    name=name, url=server.url, headers=server.headers, headers_command=server.headers_command
-                )
+                ServerSpec(name=name, url=server.url, headers=server.headers, headers_command=server.headers_command)
             )
     return specs
+
+
+def _ntasks(n: int) -> str:
+    return f"task{'s' if n != 1 else ''}"
 
 
 async def run(session: Session, config: Config) -> None:
@@ -334,6 +338,8 @@ async def run(session: Session, config: Config) -> None:
             outbox.submit(lambda: render(text))
 
     def _show_call(tool_call_id: str, name: str, args: dict) -> None:
+        if name.startswith("task_"):
+            return
         calls.calls[tool_call_id] = _Call(name=name, args=args, started_at=time.monotonic())
         _invalidate()
 
@@ -344,9 +350,10 @@ async def run(session: Session, config: Config) -> None:
             if call is not None:
                 style = _ERROR_BULLET_STYLE if isinstance(result, ErrorResult) else TOOL_BULLET_STYLE
                 terminal_renderer.tool_call(call.name, call.args, tool_call_id=tool_call_id, bullet_style=style)
-            terminal_renderer.tool_result(tool_call_id, result)
+                terminal_renderer.tool_result(tool_call_id, result)
 
-        outbox.submit(_print)
+        if call is not None:
+            outbox.submit(_print)
         _invalidate()
 
     class _Sink:
@@ -406,9 +413,39 @@ async def run(session: Session, config: Config) -> None:
             frame = SPINNER_FRAMES[int(elapsed * 1000 / _SPINNER_MS) % len(SPINNER_FRAMES)]
             arrow = "↑" if state.think_phase == "up" else "↓"
             token_part = f"  {arrow}{state.think_tokens}" if state.think_tokens else ""
-            return _fmt_thinking(frame, elapsed=elapsed, token_part=token_part)
+            parts: list[tuple[str, str]] = list(_fmt_thinking(frame, elapsed=elapsed, token_part=token_part))
+            tasks = task_registry.list()
+            if any(t.status == "in_progress" for t in tasks):
+                for i, (indent, icon, title) in enumerate(fmt_tree_lines(tasks)):
+                    parts.append(("class:thinking", "\n  ⎿  " if i == 0 else "\n     "))
+                    parts.append(("class:task-guide", indent + icon + " "))
+                    parts.append(("class:task", title))
+            elif tasks:
+                n = len(tasks)
+                parts.append(("class:thinking", f" ({n} {_ntasks(n)})"))
+            return FormattedText(parts)
         if state.status_text:
-            return _fmt_status(state.status_text, style_class=state.status_style)
+            parts = list(_fmt_status(state.status_text, style_class=state.status_style))
+            tasks = state.tasks_snapshot
+            if tasks:
+                n = done = open_ = 0
+                has_active = False
+                for t in tasks:
+                    n += 1
+                    if t.status == "in_progress":
+                        has_active = True
+                    if t.status == "completed":
+                        done += 1
+                    elif t.status not in ("completed", "cancelled", "failed"):
+                        open_ += 1
+                if has_active:
+                    parts.append(("class:thinking", f"\n\n  {n} {_ntasks(n)} ({done} done, {open_} open)"))
+                    for indent, icon, title in fmt_tree_lines(tasks):
+                        parts.append(("class:task-guide", f"\n  {indent}{icon} "))
+                        parts.append(("class:task", title))
+                else:
+                    parts.append(("class:thinking", f" ({n} {_ntasks(n)})"))
+            return FormattedText(parts)
         return FormattedText([])
 
     def _has_calls() -> bool:
@@ -572,7 +609,7 @@ async def run(session: Session, config: Config) -> None:
                     filter=Condition(_has_calls),
                 ),
                 ConditionalContainer(
-                    Window(FormattedTextControl(_get_status), height=1),
+                    Window(FormattedTextControl(_get_status), dont_extend_height=True, height=Dimension(max=10)),
                     filter=Condition(_has_status),
                 ),
                 ConditionalContainer(
@@ -644,6 +681,7 @@ async def run(session: Session, config: Config) -> None:
             state.thinking_at = time.monotonic()
             state.think_phase = ""
             state.think_tokens = 0
+            state.tasks_snapshot = []
             session.emit_thinking_start()
             _invalidate()
 
@@ -658,6 +696,7 @@ async def run(session: Session, config: Config) -> None:
                 state.think_phase = ""
                 state.think_tokens = 0
                 _set_status(f"• thinking for {_fmt_elapsed(elapsed)}", style_class="thinking-for")
+                state.tasks_snapshot = task_registry.list()
                 state.active_turn = None
                 session.emit_thinking_stop()
                 loop.remove_signal_handler(signal.SIGINT)

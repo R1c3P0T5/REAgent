@@ -5,9 +5,20 @@ from reagent.tools.base import Tool
 from reagent.tools.edit_file import EditFileTool
 from reagent.tools.read_file import ReadFileTool
 from reagent.tools.shell import ShellTool
+from reagent.tools.task import TaskCreateTool, TaskDeleteTool, TaskGetTool, TaskListTool, TaskUpdateTool
 from reagent.tools.write_file import WriteFileTool
 
-_ALL_TOOLS: list[Tool] = [ShellTool(), ReadFileTool(), WriteFileTool(), EditFileTool()]
+_ALL_TOOLS: list[Tool] = [
+    ShellTool(),
+    ReadFileTool(),
+    WriteFileTool(),
+    EditFileTool(),
+    TaskCreateTool(),
+    TaskListTool(),
+    TaskGetTool(),
+    TaskUpdateTool(),
+    TaskDeleteTool(),
+]
 
 TOOLS: list[dict[str, Any]] = [t.to_schema() for t in _ALL_TOOLS]
 TOOLS_BY_NAME: dict[str, Tool] = {t.name: t for t in _ALL_TOOLS}
