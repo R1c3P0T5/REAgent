@@ -39,16 +39,14 @@ class ReadFileTool(Tool):
     name = "read_file"
     description = "Read the contents of a file. Optionally specify a 1-indexed line range."
 
-    @property
-    def parameters(self) -> dict[str, Any]:
-        return params(
-            {
-                "path": prop("string"),
-                "start_line": prop("integer", "First line to read (1-indexed, inclusive)."),
-                "end_line": prop("integer", "Last line to read (1-indexed, inclusive)."),
-            },
-            required=["path"],
-        )
+    parameters = params(
+        {
+            "path": prop("string"),
+            "start_line": prop("integer", "First line to read (1-indexed, inclusive)."),
+            "end_line": prop("integer", "Last line to read (1-indexed, inclusive)."),
+        },
+        required=["path"],
+    )
 
     def run(self, params: dict[str, Any]) -> ToolResult:
         return read_file(params["path"], params.get("start_line"), params.get("end_line"))

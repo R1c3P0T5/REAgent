@@ -86,9 +86,6 @@ class TaskRegistry:
                 self._tasks.pop(tid, None)
             return True
 
-registry = TaskRegistry()
-
-
 def fmt_tree_lines(tasks: list[Task]) -> list[tuple[str, str, str]]:
     """Returns (indent, icon, title) tuples for UI rendering."""
     by_parent: dict[str | None, list[Task]] = {}
@@ -108,20 +105,20 @@ def fmt_tree_lines(tasks: list[Task]) -> list[tuple[str, str, str]]:
 class TaskCreateTool(Tool):
     name = "task_create"
     description = "Create a TODO task. Pass parent_id to nest under an existing task."
+    parameters = params(
+        {
+            "title": prop("string", "Short task title"),
+            "description": prop("string", "Optional details"),
+            "parent_id": prop("string", "Parent task ID to nest under"),
+        },
+        required=["title"],
+    )
 
-    @property
-    def parameters(self) -> dict[str, Any]:
-        return params(
-            {
-                "title": prop("string", "Short task title"),
-                "description": prop("string", "Optional details"),
-                "parent_id": prop("string", "Parent task ID to nest under"),
-            },
-            required=["title"],
-        )
+    def __init__(self, registry: TaskRegistry) -> None:
+        self._registry = registry
 
-    def run(self, p: dict[str, Any]) -> ToolResult:
-        result = registry.create(p["title"], p.get("description", ""), p.get("parent_id"))
+    def run(self, params: dict[str, Any]) -> ToolResult:
+        result = self._registry.create(params["title"], params.get("description", ""), params.get("parent_id"))
         if isinstance(result, str):
             return ErrorResult(f"Error: {result}")
         return ShellResult(json.dumps(asdict(result)))
@@ -130,63 +127,63 @@ class TaskCreateTool(Tool):
 class TaskListTool(Tool):
     name = "task_list"
     description = "List all TODO tasks as a tree."
+    parameters = params({}, required=[])
 
-    @property
-    def parameters(self) -> dict[str, Any]:
-        return params({}, required=[])
+    def __init__(self, registry: TaskRegistry) -> None:
+        self._registry = registry
 
-    def run(self, p: dict[str, Any]) -> ToolResult:
-        tasks = registry.list()
+    def run(self, params: dict[str, Any]) -> ToolResult:
+        tasks = self._registry.list()
         return ShellResult(json.dumps([asdict(t) for t in tasks]))
 
 
 class TaskGetTool(Tool):
     name = "task_get"
     description = "Get a task and its direct children."
+    parameters = params({"task_id": prop("string")}, required=["task_id"])
 
-    @property
-    def parameters(self) -> dict[str, Any]:
-        return params({"task_id": prop("string")}, required=["task_id"])
+    def __init__(self, registry: TaskRegistry) -> None:
+        self._registry = registry
 
-    def run(self, p: dict[str, Any]) -> ToolResult:
-        task = registry.get(p["task_id"])
+    def run(self, params: dict[str, Any]) -> ToolResult:
+        task = self._registry.get(params["task_id"])
         if task is None:
-            return ErrorResult(f"Error: task {p['task_id']!r} not found")
+            return ErrorResult(f"Error: task {params['task_id']!r} not found")
         return ShellResult(json.dumps(asdict(task)))
 
 
 class TaskUpdateTool(Tool):
     name = "task_update"
     description = "Update a task's status or notes. status: pending | in_progress | completed | cancelled | failed"
+    parameters = params(
+        {
+            "task_id": prop("string"),
+            "status": prop("string", "pending | in_progress | completed | cancelled | failed"),
+            "notes": prop("string", "Optional progress notes"),
+        },
+        required=["task_id"],
+    )
 
-    @property
-    def parameters(self) -> dict[str, Any]:
-        return params(
-            {
-                "task_id": prop("string"),
-                "status": prop("string", "pending | in_progress | completed | cancelled | failed"),
-                "notes": prop("string", "Optional progress notes"),
-            },
-            required=["task_id"],
-        )
+    def __init__(self, registry: TaskRegistry) -> None:
+        self._registry = registry
 
-    def run(self, p: dict[str, Any]) -> ToolResult:
-        status = p.get("status")
+    def run(self, params: dict[str, Any]) -> ToolResult:
+        status = params.get("status")
         if status is not None and status not in _VALID_STATUSES:
             return ErrorResult(f"Error: invalid status {status!r}. Use: {', '.join(sorted(_VALID_STATUSES))}")
-        task = registry.update(p["task_id"], status=status, notes=p.get("notes"))  # type: ignore[arg-type]
-        return ShellResult(json.dumps(asdict(task))) if task else ErrorResult(f"Error: task {p['task_id']!r} not found")
+        task = self._registry.update(params["task_id"], status=status, notes=params.get("notes"))  # type: ignore[arg-type]
+        return ShellResult(json.dumps(asdict(task))) if task else ErrorResult(f"Error: task {params['task_id']!r} not found")
 
 
 class TaskDeleteTool(Tool):
     name = "task_delete"
     description = "Remove a task from the list."
+    parameters = params({"task_id": prop("string")}, required=["task_id"])
 
-    @property
-    def parameters(self) -> dict[str, Any]:
-        return params({"task_id": prop("string")}, required=["task_id"])
+    def __init__(self, registry: TaskRegistry) -> None:
+        self._registry = registry
 
-    def run(self, p: dict[str, Any]) -> ToolResult:
-        if not registry.delete(p["task_id"]):
-            return ErrorResult(f"Error: task {p['task_id']!r} not found")
-        return ShellResult(json.dumps({"deleted": p["task_id"]}))
+    def run(self, params: dict[str, Any]) -> ToolResult:
+        if not self._registry.delete(params["task_id"]):
+            return ErrorResult(f"Error: task {params['task_id']!r} not found")
+        return ShellResult(json.dumps({"deleted": params["task_id"]}))

@@ -38,12 +38,10 @@ class WriteFileTool(Tool):
     name = "write_file"
     description = "Create or overwrite a file with the given content."
 
-    @property
-    def parameters(self) -> dict[str, Any]:
-        return params(
-            {"path": prop("string"), "content": prop("string")},
-            required=["path", "content"],
-        )
+    parameters = params(
+        {"path": prop("string"), "content": prop("string")},
+        required=["path", "content"],
+    )
 
     def run(self, params: dict[str, Any]) -> ToolResult:
         return write_file(params["path"], params["content"])

@@ -47,20 +47,19 @@ def params(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
 class Tool(ABC):
     name: str
     description: str
-
-    @property
-    @abstractmethod
-    def parameters(self) -> dict[str, Any]: ...
+    parameters: dict[str, Any]
+    silent: bool = False
 
     @abstractmethod
     def run(self, params: dict[str, Any]) -> "ToolResult | Awaitable[ToolResult]": ...
 
-    def to_schema(self) -> dict[str, Any]:
+    @classmethod
+    def to_schema(cls) -> dict[str, Any]:
         return {
             "type": "function",
             "function": {
-                "name": self.name,
-                "description": self.description,
-                "parameters": self.parameters,
+                "name": cls.name,
+                "description": cls.description,
+                "parameters": cls.parameters,
             },
         }

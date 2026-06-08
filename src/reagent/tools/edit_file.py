@@ -39,17 +39,15 @@ class EditFileTool(Tool):
     name = "edit_file"
     description = "Replace a range of lines in an existing file. Use read_file first to get line numbers."
 
-    @property
-    def parameters(self) -> dict[str, Any]:
-        return params(
-            {
-                "path": prop("string"),
-                "start_line": prop("integer", "First line to replace (1-indexed, inclusive)."),
-                "end_line": prop("integer", "Last line to replace (1-indexed, inclusive). Defaults to start_line."),
-                "content": prop("string"),
-            },
-            required=["path", "start_line", "content"],
-        )
+    parameters = params(
+        {
+            "path": prop("string"),
+            "start_line": prop("integer", "First line to replace (1-indexed, inclusive)."),
+            "end_line": prop("integer", "Last line to replace (1-indexed, inclusive). Defaults to start_line."),
+            "content": prop("string"),
+        },
+        required=["path", "start_line", "content"],
+    )
 
     def run(self, params: dict[str, Any]) -> ToolResult:
         return edit_file(params["path"], params["start_line"], params.get("end_line"), params["content"])
