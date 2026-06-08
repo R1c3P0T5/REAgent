@@ -24,7 +24,6 @@ from prompt_toolkit.layout.processors import BeforeInput, Processor, Transformat
 from prompt_toolkit.styles import Style as PTStyle
 from rich.console import Console
 from rich.style import Style as RichStyle
-from rich.text import Text
 
 from reagent.compact import make_compact_fn
 from reagent.config import Config
@@ -283,10 +282,8 @@ def _exit_usage(session: Session) -> _ExitUsage | None:
     )
 
 
-def _print_usage(console: Console, text: str, *, resume_command: str | None = None) -> None:
-    console.print(Text.assemble(("\n" + text, "dim")), highlight=False)
-    if resume_command is not None:
-        console.print(Text.assemble(("Resume with ", "dim"), (resume_command, "bright_magenta")), highlight=False)
+def _print_usage(renderer: RichRenderer, text: str, *, resume_command: str | None = None) -> None:
+    renderer.exit_usage(text, resume_command=resume_command)
 
 
 def _make_app(*, layout: Layout | None, key_bindings: KeyBindingsBase | None) -> Application[None]:
@@ -305,6 +302,8 @@ async def run(session: Session, config: Config) -> None:
     terminal_renderer = RichRenderer(console=terminal_console, use_live=False)
     if not session.messages:
         terminal_renderer.startup_banner(config.llm.model)
+    else:
+        terminal_renderer.block_gap()
     state = _ReplState()
     calls = _PendingCalls()
     outbox = _Outbox()
@@ -671,7 +670,7 @@ async def run(session: Session, config: Config) -> None:
         await asyncio.gather(outbox_task, return_exceptions=True)
         exit_usage = _exit_usage(session)
         if exit_usage is not None:
-            _print_usage(terminal_console, exit_usage.usage, resume_command=exit_usage.resume_command)
+            _print_usage(terminal_renderer, exit_usage.usage, resume_command=exit_usage.resume_command)
 
 
 def start(session: Session, config: Config) -> None:

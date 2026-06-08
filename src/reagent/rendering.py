@@ -142,6 +142,7 @@ class RichRenderer:
         self._use_live = use_live
         self._live: Live | None = None
         self._thinking_status: _ThinkingStatus | None = None
+        self._after_block_gap = False
 
     def startup_banner(self, model: str) -> None:
         directory = _display_directory(Path.cwd())
@@ -159,13 +160,13 @@ class RichRenderer:
         )
 
         self.console.print(Panel(body, box=rich_box.ROUNDED, border_style="dim", padding=(0, 1), expand=False))
-        self.console.print()
+        self.block_gap()
 
     def assistant(self, text: str) -> None:
         if not text:
             return
 
-        self.console.print()
+        self._begin_block()
 
         try:
             rendered = self.console.render_lines(
@@ -183,7 +184,7 @@ class RichRenderer:
         if not text:
             return
 
-        self.console.print()
+        self._begin_block()
         self._print_hanging_lines(text.splitlines(), bullet_style=GUIDE_STYLE, content_style="reagent.think")
 
     def tool_call(
@@ -195,7 +196,7 @@ class RichRenderer:
         bullet_style: Style = TOOL_BULLET_STYLE,
     ) -> None:
         del tool_call_id
-        self.console.print()
+        self._begin_block()
 
         if name == "shell" and isinstance(args.get("command"), str):
             self._shell_call(args["command"], bullet_style=bullet_style)
@@ -357,7 +358,7 @@ class RichRenderer:
     def user(self, text: str) -> None:
         if not text:
             return
-        self.console.print()
+        self._begin_block()
         width = self.console.width
         for index, line in enumerate(text.splitlines() or [""]):
             prefix = "> " if index == 0 else "  "
@@ -374,19 +375,19 @@ class RichRenderer:
             )
 
     def status(self, msg: str) -> None:
-        self.console.print()
+        self._begin_block()
         self.console.print(Text(msg, style="reagent.status"))
 
     def notice(self, text: str) -> None:
         if not text:
             return
-        self.console.print()
+        self._begin_block()
         self._print_hanging_lines(text.splitlines() or [""], bullet_style=GUIDE_STYLE, content_style="dim")
 
     def error(self, text: str) -> None:
         if not text:
             return
-        self.console.print()
+        self._begin_block()
         self._print_hanging_lines(
             self._clip_lines(text), bullet_style=Style.parse("red"), content_style="reagent.error"
         )
@@ -440,13 +441,28 @@ class RichRenderer:
         grid.add_row("Token usage", usage)
         grid.add_row("Context window", context)
 
-        self.console.print()
+        self._begin_block()
         self.console.print(Panel(grid, box=rich_box.ROUNDED, border_style="dim", padding=(0, 1), expand=False))
-        self.console.print()
+        self.block_gap()
+
+    def exit_usage(self, text: str, *, resume_command: str | None = None) -> None:
+        self._begin_block()
+        self.console.print(Text(text, style="dim"), highlight=False)
+        if resume_command is not None:
+            self.console.print(
+                Text.assemble(("Resume with ", "dim"), (resume_command, "bright_magenta")), highlight=False
+            )
 
     def prompt(self, text: str) -> None:
         self.console.print(Text(text, style="reagent.prompt"), end="")
         self.console.file.flush()
+        self._after_block_gap = False
+
+    def block_gap(self) -> None:
+        if self._after_block_gap:
+            return
+        self.console.print()
+        self._after_block_gap = True
 
     def thinking_start(self) -> None:
         if not self._use_live:
@@ -474,7 +490,13 @@ class RichRenderer:
             self._live.stop()
             self._live = None
         self._thinking_status = None
+        self._begin_block()
         self.console.print(Text(f"• thinking for {_fmt_elapsed(elapsed)}", style="dim"))
+
+    def _begin_block(self) -> None:
+        if not self._after_block_gap:
+            self.console.print()
+        self._after_block_gap = False
 
     def _print_hanging_lines(self, lines: list[str], bullet_style: Style, content_style: str) -> None:
         if not lines:
