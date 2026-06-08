@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from reagent.skills import discover_skills
+from reagent.skills import discover_skills, find_skill, read_skill
 
 
 def write_skill(path: Path, text: str) -> Path:
@@ -169,3 +169,74 @@ description: Analyze PE files.
     )
 
     assert discover_skills([str(tmp_path / "skills")], enabled=False) == []
+
+
+def test_find_skill_matches_discovered_skill_by_name(tmp_path):
+    skill_path = write_skill(
+        tmp_path / "skills" / "pe-analysis" / "SKILL.md",
+        """\
+---
+name: pe-analysis
+description: Analyze PE files.
+---
+
+# PE Analysis
+""",
+    )
+    skills = discover_skills([str(tmp_path / "skills")])
+
+    skill = find_skill("pe-analysis", skills)
+
+    assert skill is not None
+    assert skill.name == "pe-analysis"
+    assert skill.path == skill_path.resolve()
+    assert find_skill("missing", skills) is None
+
+
+def test_read_skill_returns_full_skill_file_content(tmp_path):
+    skill_path = write_skill(
+        tmp_path / "skills" / "pe-analysis" / "SKILL.md",
+        """\
+---
+name: pe-analysis
+description: Analyze PE files.
+---
+
+# PE Analysis
+
+Use bounded strings output.
+""",
+    )
+    skill = discover_skills([str(tmp_path / "skills")])[0]
+
+    content = read_skill(skill)
+
+    assert content.name == "pe-analysis"
+    assert content.path == skill_path.resolve()
+    assert "# PE Analysis" in content.body
+    assert "Use bounded strings output." in content.body
+
+
+def test_read_skill_rejects_paths_that_resolve_outside_skill_root(tmp_path):
+    skill_path = write_skill(
+        tmp_path / "skills" / "pe-analysis" / "SKILL.md",
+        """\
+---
+name: pe-analysis
+description: Analyze PE files.
+---
+
+# PE Analysis
+""",
+    )
+    skill = discover_skills([str(tmp_path / "skills")])[0]
+    skill_path.unlink()
+    skill_path.symlink_to(tmp_path / "outside.md")
+    (tmp_path / "outside.md").write_text("outside", encoding="utf-8")
+
+    try:
+        read_skill(skill)
+    except PermissionError as exc:
+        assert "outside configured skill root" in str(exc)
+    else:
+        raise AssertionError("read_skill should reject a replaced symlink outside the skill root")
