@@ -18,7 +18,7 @@ def mark_git_root(path: Path) -> None:
 
 
 def test_load_uses_defaults_with_model_id_env(tmp_path):
-    config = load(cwd=tmp_path, env={"MODEL_ID": "claude-sonnet-4"})
+    config = load(cwd=tmp_path, env={"MODEL_ID": "claude-sonnet-4", "REAGENT_HOME": str(tmp_path / "home")})
 
     assert config.llm.model == "claude-sonnet-4"
     assert config.llm.reasoning_effort == "medium"
@@ -26,7 +26,7 @@ def test_load_uses_defaults_with_model_id_env(tmp_path):
     assert config.llm.models.available == []
     assert config.agent.max_turns == 50
     assert config.skills.enabled is True
-    assert config.skills.paths == []
+    assert config.skills.paths == ["~/.reagent/skills"]
 
 
 def test_user_project_extra_and_env_layers_override_in_order(tmp_path):
@@ -143,9 +143,26 @@ def test_llm_models_available_lists_replace(tmp_path):
     assert config.llm.models.available == ["c"]
 
 
+def test_skills_paths_empty_list_overrides_default(tmp_path):
+    config_path = write_toml(
+        tmp_path / "config.toml",
+        """
+        [llm]
+        model = "chosen"
+
+        [skills]
+        paths = []
+        """,
+    )
+
+    layers = load_layers(cwd=tmp_path, env={}, extra_config_paths=[config_path])
+
+    assert layers.config.skills.paths == []
+
+
 def test_load_requires_llm_model(tmp_path):
     with pytest.raises(ConfigError, match="llm.model"):
-        load(cwd=tmp_path, env={})
+        load(cwd=tmp_path, env={"REAGENT_HOME": str(tmp_path / "home")})
 
 
 def test_apply_provider_env_maps_known_keys_without_overwriting(tmp_path):

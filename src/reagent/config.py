@@ -21,7 +21,7 @@ DEFAULTS: dict[str, Any] = {
     "agent": {"max_turns": 50},
     "providers": {},
     "mcp": {"servers": {}},
-    "skills": {"enabled": True, "paths": []},
+    "skills": {"enabled": True, "paths": ["~/.reagent/skills"]},
 }
 
 _PROVIDER_KEY_ENV = {
