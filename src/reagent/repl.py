@@ -270,6 +270,7 @@ def _make_app(*, layout: Layout | None, key_bindings: KeyBindingsBase | None) ->
 async def run(session: Session, config: Config) -> None:
     terminal_console = Console(force_terminal=True, theme=TERMINAL_THEME)
     terminal_renderer = RichRenderer(console=terminal_console, use_live=False)
+    terminal_renderer.startup_banner(config.llm.model)
     state = _ReplState()
     calls = _PendingCalls()
     outbox = _Outbox()
