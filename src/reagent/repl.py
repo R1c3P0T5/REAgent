@@ -9,6 +9,7 @@ from typing import Literal
 
 from prompt_toolkit.application import Application, run_in_terminal
 from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.document import Document
 from prompt_toolkit.filters import Condition
 from prompt_toolkit.formatted_text import ANSI, FormattedText
 from prompt_toolkit.input.ansi_escape_sequences import ANSI_SEQUENCES
@@ -488,9 +489,17 @@ async def run(session: Session, config: Config) -> None:
             input_queue.put_nowait(text)
 
     @kb.add("down", filter=Condition(_has_completions), eager=True)
-    @kb.add("tab", filter=Condition(_has_completions), eager=True)
     def _completion_down(event) -> None:
         state.slash_idx = (state.slash_idx + 1) % len(state.slash_cmds)
+        _invalidate()
+
+    @kb.add("tab", filter=Condition(_has_completions), eager=True)
+    def _completion_accept(event) -> None:
+        cmd = state.slash_cmds[state.slash_idx]
+        text = f"/{cmd.name}"
+        state.slash_cmds = []
+        state.slash_idx = 0
+        event.current_buffer.set_document(Document(text, cursor_position=len(text)), bypass_readonly=True)
         _invalidate()
 
     @kb.add("up", filter=Condition(_has_completions), eager=True)
