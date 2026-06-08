@@ -14,7 +14,7 @@ from litellm.types.utils import ModelResponse  # noqa: E402
 
 from reagent.compact import make_compact_fn  # noqa: E402
 from reagent.config import Config  # noqa: E402
-from reagent.results import ErrorResult  # noqa: E402
+from reagent.results import ErrorResult, ToolResult  # noqa: E402
 from reagent.session.prompt import system_prompt  # noqa: E402
 from reagent.session.recorder import to_provider_message  # noqa: E402
 from reagent.session.session import Session  # noqa: E402
@@ -132,7 +132,12 @@ async def run_turn(session: Session, config: Config) -> None:
 
             session.emit_tool_call(tc.id, name, tool_input)
             tool = TOOLS_BY_NAME.get(name)
-            result = await tool.invoke(tool_input) if tool else ErrorResult(f"Error: unknown tool {name!r}")
+            if tool is None:
+                result = ErrorResult(f"Error: unknown tool {name!r}")
+            elif asyncio.iscoroutinefunction(tool.run):
+                result = await tool.run(tool_input)
+            else:
+                result = cast(ToolResult, await asyncio.to_thread(tool.run, tool_input))
 
             session.add_tool_result(tc.id, result)
 

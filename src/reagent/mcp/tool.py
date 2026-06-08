@@ -18,7 +18,7 @@ class MCPTool(Tool):
     def parameters(self) -> dict[str, Any]:
         return self._parameters
 
-    async def invoke(self, params: dict[str, Any]) -> ToolResult:
+    async def run(self, params: dict[str, Any]) -> ToolResult:
         return await self._mcp.call(self.name, params)
 
 

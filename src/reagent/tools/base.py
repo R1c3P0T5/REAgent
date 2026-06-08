@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-import asyncio
 import difflib
 import os
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     from reagent.results import ToolResult
 
 
@@ -51,11 +52,8 @@ class Tool(ABC):
     @abstractmethod
     def parameters(self) -> dict[str, Any]: ...
 
-    def run(self, params: dict[str, Any]) -> "ToolResult":
-        raise NotImplementedError
-
-    async def invoke(self, params: dict[str, Any]) -> "ToolResult":
-        return await asyncio.to_thread(self.run, params)
+    @abstractmethod
+    def run(self, params: dict[str, Any]) -> "ToolResult | Awaitable[ToolResult]": ...
 
     def to_schema(self) -> dict[str, Any]:
         return {
