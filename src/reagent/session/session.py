@@ -8,6 +8,8 @@ from typing import Any, Literal, TypedDict, cast
 from reagent.protocol import OutputSink, TerminalSink
 from reagent.results import DiffResult, ErrorResult, ReadResult, ShellResult, TextResult, ToolResult
 from reagent.session.recorder import SessionRecorder, jsonable, read_entries, to_provider_message
+from reagent.tools import BASE_TOOL_HANDLERS, EXTRA_HANDLERS, make_task_handlers
+from reagent.tools.task import TaskRegistry
 
 TOKEN_LIMIT = 60_000
 _COMPACT_PREFIX = "[Context summary:"
@@ -61,6 +63,8 @@ class Session:
         self.reasoning_tokens = 0
         self.tool_calls = 0
         self.turns = 0
+        self.task_registry = TaskRegistry()
+        self.tool_handlers = {**BASE_TOOL_HANDLERS, **make_task_handlers(self.task_registry), **EXTRA_HANDLERS}
 
     @property
     def total_tokens(self) -> int:
