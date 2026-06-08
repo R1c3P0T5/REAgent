@@ -7,7 +7,9 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from rich.console import Console
+from rich import box as rich_box
+from rich.console import Console, Group
+from rich.panel import Panel
 
 if TYPE_CHECKING:
     from reagent.session.session import Session
@@ -16,10 +18,12 @@ from rich.markdown import Markdown
 from rich.segment import Segment, Segments
 from rich.style import Style
 from rich.syntax import Syntax
+from rich.table import Table
 from rich.theme import Theme
 from rich.text import Text
 
 from reagent.results import DiffResult, ErrorResult, ReadResult, ShellResult, ToolResult
+from reagent.session.recorder import _client_version
 
 
 SPINNER_FRAMES = "☰☱☲☳☴☵☶☷"
@@ -95,6 +99,24 @@ _BG_DEL = Style.parse("on #4A221D")  # dark red bg for diff deletions (codex pal
 _EDITOR_INDENT = "     "  # left margin for read/diff editor lines
 
 
+def _display_directory(path: Path) -> str:
+    home = Path.home()
+    try:
+        relative = path.relative_to(home)
+        prefix = "~"
+    except ValueError:
+        relative = path
+        prefix = ""
+
+    parts = relative.parts
+    if len(parts) > 3:
+        directory = str(Path(parts[0], "…", *parts[-2:]))
+    else:
+        directory = str(relative) if parts else ""
+
+    return f"{prefix}/{directory}" if prefix and directory else prefix or directory
+
+
 class RichRenderer:
     def __init__(self, console: Console | None = None, max_lines: int = 40, use_live: bool = True) -> None:
         self.console = console if console is not None else Console(theme=TERMINAL_THEME)
@@ -102,6 +124,24 @@ class RichRenderer:
         self._use_live = use_live
         self._live: Live | None = None
         self._thinking_status: _ThinkingStatus | None = None
+
+    def startup_banner(self, model: str) -> None:
+        directory = _display_directory(Path.cwd())
+
+        title = Text.assemble(
+            (">_ ", "dim"),
+            ("REAgent", "white"),
+            (f" v{_client_version()}", "dim"),
+        )
+        body = Group(
+            title,
+            Text(),
+            Text.assemble(("model:", "dim"), "     ", model),
+            Text.assemble(("directory:", "dim"), " ", directory),
+        )
+
+        self.console.print(Panel(body, box=rich_box.ROUNDED, border_style="dim", padding=(0, 1), expand=False))
+        self.console.print()
 
     def assistant(self, text: str) -> None:
         if not text:
@@ -334,18 +374,13 @@ class RichRenderer:
         )
 
     def status_panel(self, session: Session) -> None:
-        from rich import box as rich_box
-        from rich.panel import Panel
-        from rich.table import Table
-        from rich.text import Text as RichText
-
         ctx = session.context_tokens
         limit = session.token_limit
         pct = ctx / limit * 100 if limit else 0
         bar_w = 20
         filled = round(ctx / limit * bar_w) if limit else 0
 
-        bar = RichText()
+        bar = Text()
         bar.append("█" * filled)
         bar.append("░" * (bar_w - filled), style="dim")
         bar.append(f"  {ctx:,} / {limit:,}  ({pct:.0f}%)")
