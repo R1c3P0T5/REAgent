@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from reagent.constants import DEFAULT_HOME_DIR, HOME_ENV_VAR, PROJECT_CONFIG_DIR
+
 
 DEFAULTS: dict[str, Any] = {
     "llm": {
@@ -124,7 +126,7 @@ def apply_provider_env(config: Config, env: MutableMapping[str, str] | None = No
 def user_config_path(env: Mapping[str, str] | None = None) -> Path:
     """Return the user-level config path used by provider management commands."""
     effective_env = os.environ if env is None else env
-    return Path(effective_env.get("REAGENT_HOME", "~/.reagent")).expanduser() / "config.toml"
+    return Path(effective_env.get(HOME_ENV_VAR, DEFAULT_HOME_DIR)).expanduser() / "config.toml"
 
 
 def set_provider_key(provider: str, key: str, env: Mapping[str, str] | None = None) -> Path:
@@ -183,7 +185,7 @@ def _file_layers(
     extra_config_paths: Sequence[str | Path],
 ) -> list[Layer]:
     layers: list[Layer] = []
-    reagent_home = Path(env.get("REAGENT_HOME", "~/.reagent")).expanduser()
+    reagent_home = Path(env.get(HOME_ENV_VAR, DEFAULT_HOME_DIR)).expanduser()
     user_config = reagent_home / "config.toml"
     project_config = _project_config_path(cwd)
 
@@ -269,7 +271,7 @@ def _toml_string(value: str) -> str:
 def _project_config_path(cwd: Path) -> Path:
     root = _find_git_root(cwd)
     base_dir = root if root is not None else cwd
-    return base_dir / ".reagent" / "config.toml"
+    return base_dir / PROJECT_CONFIG_DIR / "config.toml"
 
 
 def _find_git_root(cwd: Path) -> Path | None:

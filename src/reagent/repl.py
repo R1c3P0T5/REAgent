@@ -28,6 +28,7 @@ from rich.text import Text
 
 from reagent.compact import make_compact_fn
 from reagent.config import Config
+from reagent.constants import CLI_NAME
 from reagent.rendering import (
     ASSISTANT_BULLET_STYLE,
     GUIDE_STYLE,
@@ -257,7 +258,7 @@ def _resume_command(session: Session) -> str | None:
     if not isinstance(session_id, str) or not session_id:
         return None
     
-    return f"reagent --resume {session_id}"
+    return f"{CLI_NAME} --resume {session_id}"
 
 
 @dataclass(frozen=True)

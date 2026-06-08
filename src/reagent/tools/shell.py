@@ -3,6 +3,7 @@ import subprocess
 import tempfile
 from typing import Any
 
+from reagent.constants import SHELL_OUTPUT_PREFIX
 from reagent.results import ErrorResult, ShellResult, ToolResult
 from reagent.tools.base import MAX_OUTPUT, Tool, params, prop
 
@@ -24,7 +25,7 @@ def _truncate(output: str) -> str:
     if len(output) <= MAX_OUTPUT:
         return output
 
-    with tempfile.NamedTemporaryFile(mode="w", prefix="reagent_shell_", suffix=".txt", dir="/tmp", delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", prefix=SHELL_OUTPUT_PREFIX, suffix=".txt", dir="/tmp", delete=False) as f:
         f.write(output)
         spill_path = f.name
 
