@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
 from reagent.protocol import OutputSink, TerminalSink
-from reagent.results import DiffResult, ErrorResult, ReadResult, ShellResult, TextResult, ToolResult
+from reagent.results import DiffResult, ErrorResult, ReadResult, ShellResult, SkillResult, TextResult, ToolResult
 from reagent.session.recorder import SessionRecorder, jsonable, read_entries, to_provider_message
 from reagent.tools import BASE_TOOL_HANDLERS, EXTRA_HANDLERS, make_task_handlers
 from reagent.tools.task import TaskRegistry
@@ -249,6 +249,7 @@ def _apply_compact(
 _RESULT_REGISTRY: dict[str, type[ToolResult]] = {
     "ShellResult": ShellResult,
     "ReadResult": ReadResult,
+    "SkillResult": SkillResult,
     "DiffResult": DiffResult,
     "ErrorResult": ErrorResult,
     "TextResult": TextResult,

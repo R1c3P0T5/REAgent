@@ -28,6 +28,16 @@ class ReadResult:
 
 
 @dataclass
+class SkillResult:
+    path: str
+    content: str
+
+    @property
+    def text(self) -> str:
+        return self.content or "(empty skill)"
+
+
+@dataclass
 class DiffResult:
     path: str
     diff: str
@@ -57,4 +67,4 @@ class TextResult:
         return self.content
 
 
-ToolResult: TypeAlias = ShellResult | ReadResult | DiffResult | ErrorResult | TextResult
+ToolResult: TypeAlias = ShellResult | ReadResult | SkillResult | DiffResult | ErrorResult | TextResult

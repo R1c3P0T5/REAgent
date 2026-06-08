@@ -25,7 +25,7 @@ from rich.theme import Theme
 from rich.text import Text
 
 from reagent.constants import APP_DISPLAY_NAME
-from reagent.results import DiffResult, ErrorResult, TextResult, ReadResult, ShellResult, ToolResult
+from reagent.results import DiffResult, ErrorResult, ReadResult, ShellResult, SkillResult, TextResult, ToolResult
 from reagent.session.recorder import _client_version
 
 
@@ -220,6 +220,10 @@ class RichRenderer:
                     self._print_read(content, path, start_line)
                 else:
                     self._print_tree(["(empty file)"], style="reagent.guide")
+            case SkillResult(content=content, path=path):
+                name = Path(path).parent.name
+                n = len(content.splitlines())
+                self._print_header(Text(f"Loaded skill /{name} ({n} lines)"))
             case DiffResult(diff=diff, path=path, message=msg, kind=kind):
                 if diff:
                     raw_lines = diff.splitlines()
