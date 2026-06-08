@@ -9,6 +9,8 @@ from typing import Annotated, Any
 import typer
 from typer._completion_shared import get_completion_script
 
+from reagent.constants import CLI_NAME, COMPLETION_ENV_VAR
+
 _CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
 
@@ -84,8 +86,8 @@ def run(
 def completion(shell: CompletionShell) -> None:
     typer.echo(
         get_completion_script(
-            prog_name="reagent",
-            complete_var="_REAGENT_COMPLETE",
+            prog_name=CLI_NAME,
+            complete_var=COMPLETION_ENV_VAR,
             shell=shell,
         ),
         nl=False,
@@ -128,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     completion_init()
 
     try:
-        result = app(args=argv, complete_var="_REAGENT_COMPLETE", standalone_mode=False)
+        result = app(args=argv, complete_var=COMPLETION_ENV_VAR, standalone_mode=False)
         return result or 0
 
     except click.ClickException as exc:

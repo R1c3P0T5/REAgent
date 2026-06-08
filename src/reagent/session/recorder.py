@@ -10,6 +10,8 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast, get_args
 
+from reagent.constants import APP_PACKAGE_NAME, DEFAULT_HOME_DIR, HOME_ENV_VAR
+
 
 EventType = Literal["meta", "message", "usage", "compact"]
 EVENT_TYPES: frozenset[str] = frozenset(get_args(EventType))
@@ -30,13 +32,13 @@ def utc_now() -> str:
 
 def _client_version() -> str:
     try:
-        return version("reagent")
+        return version(APP_PACKAGE_NAME)
     except PackageNotFoundError:
         return "dev"
 
 
 def _data_root() -> Path:
-    return Path(os.environ.get("REAGENT_HOME", "~/.reagent")).expanduser()
+    return Path(os.environ.get(HOME_ENV_VAR, DEFAULT_HOME_DIR)).expanduser()
 
 
 _INTERNAL_FIELDS = frozenset({"id", "parent_id", "is_think", "is_summary", "result_type", "result_data"})
@@ -147,7 +149,7 @@ class SessionRecorder:
                 "created_at": created_at,
                 "cwd": cwd,
                 "model": model,
-                "client": {"name": "reagent", "version": _client_version()},
+                "client": {"name": APP_PACKAGE_NAME, "version": _client_version()},
                 "python_version": python_version if python_version is not None else sys.version.split()[0],
             },
             ts=created_at,

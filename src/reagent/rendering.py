@@ -24,6 +24,7 @@ from rich.table import Table
 from rich.theme import Theme
 from rich.text import Text
 
+from reagent.constants import APP_DISPLAY_NAME
 from reagent.results import DiffResult, ErrorResult, ReadResult, ShellResult, ToolResult
 from reagent.session.recorder import _client_version
 
@@ -147,7 +148,7 @@ class RichRenderer:
 
         title = Text.assemble(
             (">_ ", "dim"),
-            ("REAgent", "white"),
+            (APP_DISPLAY_NAME, "white"),
             (f" v{_client_version()}", "dim"),
         )
         body = Group(
@@ -419,7 +420,7 @@ class RichRenderer:
 
         title = Text.assemble(
             (">_ ", "dim"),
-            ("REAgent", "text"),
+            (APP_DISPLAY_NAME, "text"),
             (f" v{_client_version()}", "dim"),
         )
         grid.add_row(title, "")
