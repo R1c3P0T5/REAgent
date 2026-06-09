@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from reagent.config import ConfigError, apply_provider_env, load, load_layers
+from reagent.config import ConfigError, apply_provider_env, llm_completion_kwargs, llm_provider_kwargs, load, load_layers
 
 
 def write_toml(path: Path, text: str) -> Path:
@@ -208,6 +208,64 @@ def test_apply_provider_env_maps_known_keys_without_overwriting(tmp_path):
 
     assert env["OPENAI_API_KEY"] == "existing"
     assert env["ANTHROPIC_API_KEY"] == "config-anthropic"
+
+
+def test_llm_provider_kwargs_uses_matching_provider_base_url_and_key(tmp_path):
+    home = tmp_path / "home"
+    write_toml(
+        home / "config.toml",
+        """
+        [providers.ollama]
+        base_url = "http://127.0.0.1:11434"
+        key = "ollama-key"
+        """,
+    )
+    config = load(
+        cwd=tmp_path,
+        env={"MODEL_ID": "ollama/qwen3:14b", "REAGENT_HOME": str(home)},
+    )
+
+    assert llm_provider_kwargs(config) == {
+        "api_base": "http://127.0.0.1:11434",
+        "api_key": "ollama-key",
+    }
+
+
+def test_llm_provider_kwargs_ignores_unmatched_provider(tmp_path):
+    home = tmp_path / "home"
+    write_toml(
+        home / "config.toml",
+        """
+        [providers.openai]
+        base_url = "https://example.test/v1"
+        """,
+    )
+    config = load(
+        cwd=tmp_path,
+        env={"MODEL_ID": "ollama/qwen3:14b", "REAGENT_HOME": str(home)},
+    )
+
+    assert llm_provider_kwargs(config) == {}
+
+
+def test_llm_completion_kwargs_maps_ollama_to_ollama_chat(tmp_path):
+    home = tmp_path / "home"
+    write_toml(
+        home / "config.toml",
+        """
+        [providers.ollama]
+        base_url = "http://127.0.0.1:11434"
+        """,
+    )
+    config = load(
+        cwd=tmp_path,
+        env={"MODEL_ID": "ollama/qwen3:14b", "REAGENT_HOME": str(home)},
+    )
+
+    assert llm_completion_kwargs(config) == {
+        "model": "ollama_chat/qwen3:14b",
+        "api_base": "http://127.0.0.1:11434",
+    }
 
 
 @pytest.mark.parametrize(
