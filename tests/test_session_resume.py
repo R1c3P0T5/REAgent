@@ -11,6 +11,13 @@ from reagent.session import Session, load_session
 from reagent.session.recorder import SessionEntry, SessionRecorder, read_entries, to_provider_message
 
 
+def _summary(text: str):
+    async def _fn(messages):
+        return text
+
+    return _fn
+
+
 def test_load_session_replays_messages_usage_and_attaches_recorder(tmp_path):
     recorder_session = Session(
         sink=SilentSink(),
@@ -175,7 +182,7 @@ def test_load_session_reconstructs_read_result(tmp_path):
     assert "1: x = 1" in on_tool_result_call[2]
 
 
-def test_load_session_applies_compact_entries(tmp_path, monkeypatch):
+async def test_load_session_applies_compact_entries(tmp_path, monkeypatch):
     monkeypatch.setattr(session_module, "TOKEN_LIMIT", 1)
     recorder_session = Session(
         sink=SilentSink(),
@@ -186,7 +193,7 @@ def test_load_session_applies_compact_entries(tmp_path, monkeypatch):
     recorder_session.add_assistant("old response")
     recorder_session.add_user("latest")
 
-    recorder_session.compact(lambda messages: "summarized old context")
+    await recorder_session.compact(_summary("summarized old context"))
 
     assert recorder_session._recorder is not None
     loaded = load_session(recorder_session._recorder.path, sink=SilentSink())
@@ -198,14 +205,14 @@ def test_load_session_applies_compact_entries(tmp_path, monkeypatch):
     ]
 
 
-def test_forced_compact_compacts_below_token_limit():
+async def test_forced_compact_compacts_below_token_limit():
     session = Session(sink=SilentSink())
     session.add_user("keep")
     session.add_user("old")
     session.add_assistant("old response")
     session.add_user("latest")
 
-    changed = session.compact(lambda messages: "manual summary", force=True)
+    changed = await session.compact(_summary("manual summary"), force=True)
 
     assert changed
     assert list(session.messages) == [
@@ -215,7 +222,7 @@ def test_forced_compact_compacts_below_token_limit():
     ]
 
 
-def test_automatic_compact_still_skips_below_token_limit():
+async def test_automatic_compact_still_skips_below_token_limit():
     session = Session(sink=SilentSink())
     session.add_user("keep")
     session.add_user("old")
@@ -223,24 +230,24 @@ def test_automatic_compact_still_skips_below_token_limit():
     session.add_user("latest")
     before = session.messages
 
-    changed = session.compact(lambda messages: "automatic summary")
+    changed = await session.compact(_summary("automatic summary"))
 
     assert not changed
     assert session.messages == before
 
 
-def test_forced_compact_returns_false_when_history_is_too_short():
+async def test_forced_compact_returns_false_when_history_is_too_short():
     session = Session(sink=SilentSink())
     session.add_user("only")
     before = session.messages
 
-    changed = session.compact(lambda messages: "manual summary", force=True)
+    changed = await session.compact(_summary("manual summary"), force=True)
 
     assert not changed
     assert session.messages == before
 
 
-def test_compact_writes_summary_as_message_event(tmp_path, monkeypatch):
+async def test_compact_writes_summary_as_message_event(tmp_path, monkeypatch):
     monkeypatch.setattr(session_module, "TOKEN_LIMIT", 1)
     recorder_session = Session(
         sink=SilentSink(),
@@ -251,7 +258,7 @@ def test_compact_writes_summary_as_message_event(tmp_path, monkeypatch):
     recorder_session.add_assistant("old response")
     recorder_session.add_user("latest")
 
-    recorder_session.compact(lambda messages: "summarized old context")
+    await recorder_session.compact(_summary("summarized old context"))
 
     assert recorder_session._recorder is not None
     entries, _ = read_entries(recorder_session._recorder.path)
@@ -276,7 +283,7 @@ def test_load_session_ignores_unreferenced_summary_messages(tmp_path):
     assert loaded.messages == ({"role": "user", "content": "hello"},)
 
 
-def test_resumed_recorder_does_not_parent_new_messages_to_summary(tmp_path, monkeypatch):
+async def test_resumed_recorder_does_not_parent_new_messages_to_summary(tmp_path, monkeypatch):
     monkeypatch.setattr(session_module, "TOKEN_LIMIT", 1)
     recorder_session = Session(
         sink=SilentSink(),
@@ -286,7 +293,7 @@ def test_resumed_recorder_does_not_parent_new_messages_to_summary(tmp_path, monk
     recorder_session.add_user("old")
     recorder_session.add_assistant("old response")
     recorder_session.add_user("latest")
-    recorder_session.compact(lambda messages: "summary")
+    await recorder_session.compact(_summary("summary"))
     assert recorder_session._recorder is not None
 
     loaded = load_session(recorder_session._recorder.path, sink=SilentSink())
@@ -318,7 +325,7 @@ def test_load_session_ignores_compact_when_summary_is_missing(tmp_path):
     )
 
 
-def test_load_session_applies_chained_compact_entries(tmp_path, monkeypatch):
+async def test_load_session_applies_chained_compact_entries(tmp_path, monkeypatch):
     monkeypatch.setattr(session_module, "TOKEN_LIMIT", 1)
     recorder_session = Session(
         sink=SilentSink(),
@@ -328,10 +335,10 @@ def test_load_session_applies_chained_compact_entries(tmp_path, monkeypatch):
     recorder_session.add_user("old one")
     recorder_session.add_assistant("old response")
     recorder_session.add_user("latest")
-    recorder_session.compact(lambda messages: "summary one")
+    await recorder_session.compact(_summary("summary one"))
 
     recorder_session.add_user("newest")
-    recorder_session.compact(lambda messages: "summary two")
+    await recorder_session.compact(_summary("summary two"))
 
     assert recorder_session._recorder is not None
     loaded = load_session(recorder_session._recorder.path, sink=SilentSink())
@@ -363,7 +370,7 @@ class FailingCompactRecorder:
         raise OSError("disk full")
 
 
-def test_compact_propagates_recorder_failures(monkeypatch):
+async def test_compact_propagates_recorder_failures(monkeypatch):
     monkeypatch.setattr(session_module, "TOKEN_LIMIT", 1)
     session = Session(sink=SilentSink(), recorder=cast(SessionRecorder, FailingCompactRecorder()))
     session.add_user("keep")
@@ -372,14 +379,14 @@ def test_compact_propagates_recorder_failures(monkeypatch):
     session.add_user("latest")
 
     try:
-        session.compact(lambda messages: "summary")
+        await session.compact(_summary("summary"))
     except OSError as exc:
         assert str(exc) == "disk full"
     else:
         raise AssertionError("compact should propagate recorder persistence failures")
 
 
-def test_compact_preserves_history_when_recorder_compact_fails(monkeypatch):
+async def test_compact_preserves_history_when_recorder_compact_fails(monkeypatch):
     monkeypatch.setattr(session_module, "TOKEN_LIMIT", 1)
     session = Session(sink=SilentSink(), recorder=cast(SessionRecorder, FailingCompactRecorder()))
     session.add_user("keep")
@@ -389,7 +396,7 @@ def test_compact_preserves_history_when_recorder_compact_fails(monkeypatch):
     before = session.messages
 
     try:
-        session.compact(lambda messages: "summary")
+        await session.compact(_summary("summary"))
     except OSError:
         pass
     else:

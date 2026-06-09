@@ -116,7 +116,7 @@ def _cancel_active_turn(state: _ReplState) -> bool:
 
 @dataclass(frozen=True)
 class _SlashRoute:
-    action: Literal["exit", "handled", "submit"]
+    action: Literal["exit", "handled", "submit", "compact"]
     prompt: str = ""
     message: str = ""
     render: SlashRender = "default"
@@ -248,6 +248,8 @@ def _route_slash_result(user_input: str, result: SlashResult) -> _SlashRoute:
         return _SlashRoute(action="submit", prompt=result.prompt, message=message)
     if result.outcome == "exit":
         return _SlashRoute(action="exit")
+    if result.outcome == "compact":
+        return _SlashRoute(action="compact")
     # covers "handled" and "unknown"
     return _SlashRoute(action="handled", message=result.message, render=result.render)
 
@@ -686,6 +688,19 @@ async def run(session: Session, config: Config) -> None:
                         "notice": terminal_renderer.notice,
                     }.get(route.render, terminal_renderer.status)
                     _commit(render_fn, route.message)
+                await outbox.drain()
+                continue
+
+            if route.action == "compact":
+                try:
+                    changed = await session.compact(compact_fn, force=True)
+                except OSError as exc:
+                    _commit(terminal_renderer.error, f"Compact failed: {exc}")
+                else:
+                    _commit(
+                        terminal_renderer.notice if changed else terminal_renderer.status,
+                        "Context compacted" if changed else "Nothing to compact yet",
+                    )
                 await outbox.drain()
                 continue
 

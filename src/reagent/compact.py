@@ -4,7 +4,7 @@ import json
 import re
 from typing import cast
 
-from litellm import completion
+from litellm import acompletion
 from litellm.types.utils import ModelResponse
 
 from reagent.session import Message
@@ -116,8 +116,8 @@ def _extract_summary(raw: str) -> str:
 
 
 def make_compact_fn(model: str):
-    def _compact(turns: list[Message]) -> str:
-        resp = completion(
+    async def _compact(turns: list[Message]) -> str:
+        resp = await acompletion(
             model=model,
             messages=[
                 {"role": "system", "content": _COMPACT_PROMPT},

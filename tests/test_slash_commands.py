@@ -101,48 +101,24 @@ def test_dispatch_status_reports_session_counters_without_history_change():
     assert session.messages == before
 
 
-def test_dispatch_compact_forces_session_compaction():
-    session = Session(sink=SilentSink())
-    session.add_user("keep")
-    session.add_user("old")
-    session.add_assistant("old response")
-    session.add_user("latest")
-
-    result = dispatch("/compact", session, compact_fn=lambda messages: "manual summary")
-
-    assert result.outcome == "handled"
-    assert result.message == "Context compacted"
-    assert list(session.messages) == [
-        {"role": "user", "content": "keep"},
-        {"role": "user", "content": "[Context summary: manual summary]"},
-        {"role": "user", "content": "latest"},
-    ]
-
-
-def test_dispatch_compact_reports_nothing_to_compact():
+def test_dispatch_compact_returns_compact_intent():
     session = Session(sink=SilentSink())
     session.add_user("only")
-    before = session.messages
 
     result = dispatch("/compact", session, compact_fn=lambda messages: "manual summary")
 
-    assert result.outcome == "handled"
-    assert result.message == "Nothing to compact yet"
-    assert session.messages == before
+    assert result.outcome == "compact"
+    assert result.command_name == "compact"
 
 
-def test_dispatch_compact_surfaces_persistence_failure(monkeypatch):
+def test_dispatch_compact_unavailable_without_fn():
     session = Session(sink=SilentSink())
 
-    def fail_compact(*args, **kwargs):
-        raise OSError("disk full")
-
-    monkeypatch.setattr(session, "compact", fail_compact)
-
-    result = dispatch("/compact", session, compact_fn=lambda messages: "manual summary")
+    result = dispatch("/compact", session)
 
     assert result.outcome == "handled"
-    assert result.message == "Compact failed: disk full"
+    assert result.message == "Compact is unavailable"
+
 
 def _make_skill(tmp_path: Path, name: str, body: str) -> SkillMetadata:
     skill_file = tmp_path / name / "SKILL.md"
