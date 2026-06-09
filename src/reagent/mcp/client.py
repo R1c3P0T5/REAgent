@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import subprocess
 from collections.abc import Callable
 from contextlib import AsyncExitStack, suppress
@@ -11,6 +12,7 @@ from types import TracebackType
 from typing import Any
 
 from mcp import ClientSession
+from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamablehttp_client
 from mcp.types import Tool
 
@@ -91,16 +93,29 @@ class MCPClient:
         self._emit(f"[mcp] {spec.name}: {count} tool(s) ready")
 
     async def _open(self, spec: ServerSpec, stack: AsyncExitStack) -> tuple[ClientSession, list[Tool]]:
-        headers = dict(spec.headers)
-        if spec.headers_command:
-            headers.update(await asyncio.to_thread(_run_headers_cmd, spec.headers_command, spec.connect_timeout))
-        read, write, _ = await stack.enter_async_context(
-            streamablehttp_client(
-                spec.url,
-                headers=headers,
-                timeout=timedelta(seconds=spec.connect_timeout),
+        if spec.transport == "stdio":
+            assert spec.command is not None
+            params = StdioServerParameters(
+                command=spec.command,
+                args=list(spec.args),
+                env={**os.environ, **spec.env},
             )
-        )
+            devnull = stack.enter_context(open(os.devnull, "w"))
+            read, write = await stack.enter_async_context(stdio_client(params, errlog=devnull))
+
+        else:
+            assert spec.url is not None
+            headers = dict(spec.headers)
+            if spec.headers_command:
+                headers.update(await asyncio.to_thread(_run_headers_cmd, spec.headers_command, spec.connect_timeout))
+            read, write, _ = await stack.enter_async_context(
+                streamablehttp_client(
+                    spec.url,
+                    headers=headers,
+                    timeout=timedelta(seconds=spec.connect_timeout),
+                )
+            )
+
         session = await stack.enter_async_context(ClientSession(read, write))
         await session.initialize()
         return session, (await session.list_tools()).tools
