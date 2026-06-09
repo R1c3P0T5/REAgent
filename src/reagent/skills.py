@@ -7,7 +7,11 @@ from pathlib import Path
 
 
 _SKILL_NAME = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
-_RESERVED_SKILL_NAMES = {"compact", "exit", "quit", "status"}
+
+
+def _reserved_skill_names() -> frozenset[str]:
+    from reagent.slash_commands import BUILTINS
+    return frozenset({n for cmd in BUILTINS for n in (cmd.name, *cmd.aliases)})
 
 
 @dataclass(frozen=True)
@@ -146,7 +150,7 @@ def _is_valid_skill_name(name: str) -> bool:
     return (
         bool(_SKILL_NAME.fullmatch(name))
         and "--" not in name
-        and name not in _RESERVED_SKILL_NAMES
+        and name not in _reserved_skill_names()
     )
 
 
