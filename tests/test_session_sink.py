@@ -201,6 +201,29 @@ def test_record_usage_tracks_cached_and_reasoning_tokens():
     assert s.reasoning_tokens == 2
 
 
+async def test_compact_marks_compacting_during_summary():
+    session = Session(sink=SilentSink())
+    session.add_user("seed")
+    session.add_assistant("a1")
+    session.add_user("u2")
+    session.add_assistant("a2")
+    session.add_user("u3 latest")
+
+    seen: dict[str, float | None] = {}
+
+    async def fake_summary(messages):
+        seen["during"] = session.compacting_at
+        return "summary"
+
+    assert session.compacting_at is None
+    changed = await session.compact(fake_summary, force=True)
+
+    assert changed is True
+    assert seen["during"] is not None
+    assert session.compacting_at is None
+    assert session.compact_done_at is not None
+
+
 def test_session_records_messages_and_usage_to_recorder():
     recorder = FakeRecorder()
     s = Session(sink=SilentSink(), recorder=cast(SessionRecorder, recorder))
