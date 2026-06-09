@@ -20,7 +20,10 @@ class LoadSkillTool(Tool):
         if self._skills:
             lines.append("\nAvailable skills:")
             for skill in self._skills:
-                lines.append(f"- {skill.name}: {skill.description}")
+                line = f"- {skill.name}: {skill.description}"
+                if skill.compatibility:
+                    line += f" (requires: {skill.compatibility})"
+                lines.append(line)
         return "\n".join(lines)
 
     @property

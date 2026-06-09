@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-_SKILL_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+_SKILL_NAME = re.compile(r"^[a-z0-9]([a-z0-9-]*[a-z0-9])?$")
 _RESERVED_SKILL_NAMES = {"compact", "exit", "quit", "status"}
 
 
@@ -16,6 +16,7 @@ class SkillMetadata:
     description: str
     path: Path
     root: Path
+    compatibility: str = ""
 
 
 @dataclass(frozen=True)
@@ -129,12 +130,24 @@ def _read_skill_metadata(path: Path, *, root: Path) -> SkillMetadata | None:
         return None
     if not _is_valid_skill_name(name):
         return None
+    if name != path.parent.name:
+        return None
 
-    return SkillMetadata(name=name, description=description, path=resolved_path, root=resolved_root)
+    return SkillMetadata(
+        name=name,
+        description=description,
+        path=resolved_path,
+        root=resolved_root,
+        compatibility=fields.get("compatibility", ""),
+    )
 
 
 def _is_valid_skill_name(name: str) -> bool:
-    return bool(_SKILL_NAME.fullmatch(name)) and name not in _RESERVED_SKILL_NAMES
+    return (
+        bool(_SKILL_NAME.fullmatch(name))
+        and "--" not in name
+        and name not in _RESERVED_SKILL_NAMES
+    )
 
 
 def _parse_frontmatter(text: str) -> dict[str, str]:
@@ -153,7 +166,7 @@ def _parse_frontmatter(text: str) -> dict[str, str]:
             continue
         key = key.strip()
         value = value.strip().strip("\"'")
-        if key in {"name", "description"}:
+        if key in {"name", "description", "compatibility"}:
             fields[key] = value
 
     return fields if closed else {}
