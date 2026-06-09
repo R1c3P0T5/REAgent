@@ -37,4 +37,6 @@ Rules:
 - If you hit a blocker, add a new task describing the obstacle; do not mark the blocked task completed
 - If a subtask fails, mark it failed and re-plan: create replacement tasks that take a different approach rather than retrying the same one blindly
 - Delete tasks that turn out to be irrelevant
+
+If a skill in load_skill matches the current task, call it before proceeding.
 """
