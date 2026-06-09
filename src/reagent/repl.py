@@ -44,7 +44,7 @@ from reagent.session import Session
 from reagent.tools.task import fmt_tree_lines
 from reagent.session.turn import run_turn
 from reagent.slash_commands import SlashCommand, SlashRender, SlashResult, completions, dispatch
-from reagent.tools import register_tools
+from reagent.tools import EXTRA_HANDLERS, register_tools
 
 # Map Shift+Enter escape sequences to F20 as a proxy key.
 # Terminals supporting kitty keyboard protocol send \x1b[13;2u;
@@ -714,6 +714,7 @@ async def run(session: Session, config: Config) -> None:
 
     async with MCPClient(_mcp_specs(config), emit=session.emit_status) as mcp:
         register_tools(build_mcp_tools(mcp))
+        session.tool_handlers.update(EXTRA_HANDLERS)
         process_task = asyncio.create_task(_process_turns())
         outbox_task = asyncio.create_task(outbox.run())
         try:

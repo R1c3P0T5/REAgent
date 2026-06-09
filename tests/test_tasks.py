@@ -21,15 +21,13 @@ def reg():
 
 
 @pytest.fixture()
-def tools(reg, monkeypatch):
-    import reagent.tools.task as mod
-    monkeypatch.setattr(mod, "registry", reg)
+def tools(reg):
     return {
-        "create": TaskCreateTool(),
-        "list": TaskListTool(),
-        "get": TaskGetTool(),
-        "update": TaskUpdateTool(),
-        "delete": TaskDeleteTool(),
+        "create": TaskCreateTool(reg),
+        "list": TaskListTool(reg),
+        "get": TaskGetTool(reg),
+        "update": TaskUpdateTool(reg),
+        "delete": TaskDeleteTool(reg),
     }
 
 

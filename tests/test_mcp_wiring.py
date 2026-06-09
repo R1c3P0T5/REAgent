@@ -20,14 +20,15 @@ def write_toml(path: Path, text: str) -> Path:
 
 @pytest.fixture
 def restore_tools():
-    all_tools = list(tools_mod._ALL_TOOLS)
     schemas = list(tools_mod.TOOLS)
     by_name = dict(tools_mod.TOOLS_BY_NAME)
+    extra = dict(tools_mod.EXTRA_HANDLERS)
     yield
-    tools_mod._ALL_TOOLS[:] = all_tools
     tools_mod.TOOLS[:] = schemas
     tools_mod.TOOLS_BY_NAME.clear()
     tools_mod.TOOLS_BY_NAME.update(by_name)
+    tools_mod.EXTRA_HANDLERS.clear()
+    tools_mod.EXTRA_HANDLERS.update(extra)
 
 
 class _FakeTool(Tool):
