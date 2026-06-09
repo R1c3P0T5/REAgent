@@ -92,6 +92,7 @@ class _Call:
 @dataclass
 class _ReplState:
     thinking_at: float | None = None
+    compacting_at: float | None = None
     think_phase: str = ""
     think_tokens: int = 0
     status_text: str = ""
@@ -411,7 +412,12 @@ async def run(session: Session, config: Config) -> None:
             _commit(terminal_renderer.user, text)
 
         def on_status(self, msg: str) -> None:
-            _set_status(msg)
+            if msg == "compacting":
+                state.compacting_at = time.monotonic()
+                _invalidate()
+            else:
+                state.compacting_at = None
+                _set_status(msg)
 
         def on_prompt(self, text: str) -> None:
             pass
@@ -423,6 +429,7 @@ async def run(session: Session, config: Config) -> None:
             pass
 
         def on_thinking_update(self, phase: str, tokens: int) -> None:
+            state.compacting_at = None
             state.think_phase = phase
             state.think_tokens = tokens
             _invalidate()
@@ -445,14 +452,11 @@ async def run(session: Session, config: Config) -> None:
         return ANSI(calls.render(width=terminal_console.width))
 
     def _get_status() -> FormattedText:
-        if session.compacting_at is not None:
-            elapsed = time.monotonic() - session.compacting_at
+        if state.compacting_at is not None:
+            elapsed = time.monotonic() - state.compacting_at
             frame = SPINNER_FRAMES[int(elapsed * 1000 / _SPINNER_MS) % len(SPINNER_FRAMES)]
             pct = min(95, round((1 - math.exp(-elapsed / _COMPACT_TAU_SECONDS)) * 100))
             return _fmt_compacting(frame, pct=pct)
-        done = session.compact_done_at
-        if done is not None and time.monotonic() - done < 0.5:
-            return _fmt_compacting(SPINNER_FRAMES[0], pct=100)
         t = state.thinking_at
         if t is not None:
             elapsed = time.monotonic() - t
@@ -717,6 +721,8 @@ async def run(session: Session, config: Config) -> None:
                         terminal_renderer.notice if changed else terminal_renderer.status,
                         "Context compacted" if changed else "Nothing to compact yet",
                     )
+                finally:
+                    state.compacting_at = None
                 await outbox.drain()
                 continue
 

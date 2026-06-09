@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
@@ -66,8 +65,6 @@ class Session:
         self.turns = 0
         self.task_registry = TaskRegistry()
         self.tool_handlers = {**BASE_TOOL_HANDLERS, **make_task_handlers(self.task_registry), **EXTRA_HANDLERS}
-        self.compacting_at: float | None = None
-        self.compact_done_at: float | None = None
 
     @property
     def total_tokens(self) -> int:
@@ -194,16 +191,13 @@ class Session:
         to_compact = [m for m, _ in self._history[1:compact_end]]
         compacted_seqs = [seq for _, seq in self._history[1:compact_end] if seq is not None]
 
-        self.compacting_at = time.monotonic()
+        self.emit_status("compacting")
         try:
             summary = await completion_fn(to_compact)
         except Exception:
             before = self.messages
             self.truncate()
             return self.messages != before
-        finally:
-            self.compacting_at = None
-            self.compact_done_at = time.monotonic()
 
         replacement = UserMessage(role="user", content=f"{_COMPACT_PREFIX} {summary}]")
         summary_seq: int | None = None
