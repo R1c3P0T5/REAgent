@@ -53,7 +53,7 @@ async def test_register_tools_adds_schema_and_handler(restore_tools):
     assert result.text == "noop"
 
 
-def test_mcp_specs_selects_enabled_http_servers_with_url(tmp_path):
+def test_mcp_specs_selects_enabled_servers(tmp_path):
     config_path = write_toml(
         tmp_path / "config.toml",
         """
@@ -64,7 +64,9 @@ def test_mcp_specs_selects_enabled_http_servers_with_url(tmp_path):
 
         [mcp.servers.local]
         transport = "stdio"
-        command = "run"
+        command = "uvx"
+        args = ["mcp-server-fetch"]
+        env = { FOO = "bar" }
 
         [mcp.servers.off]
         enabled = false
@@ -72,10 +74,15 @@ def test_mcp_specs_selects_enabled_http_servers_with_url(tmp_path):
         url = "http://127.0.0.1:1/mcp"
         """,
     )
-    config = load_layers(cwd=tmp_path, env={}, extra_config_paths=[config_path]).config
+    config = load_layers(cwd=tmp_path, env={"REAGENT_HOME": str(tmp_path)}, extra_config_paths=[config_path]).config
 
     specs = _mcp_specs(config)
 
-    assert [s.name for s in specs] == ["ida"]
-    assert specs[0].url == "http://127.0.0.1:14542/mcp"
-    assert specs[0].headers == {"Authorization": "Bearer t"}
+    assert [s.name for s in specs] == ["ida", "local"]
+    http = specs[0]
+    assert http.url == "http://127.0.0.1:14542/mcp"
+    assert http.headers == {"Authorization": "Bearer t"}
+    stdio = specs[1]
+    assert stdio.command == "uvx"
+    assert stdio.args == ("mcp-server-fetch",)
+    assert stdio.env == {"FOO": "bar"}

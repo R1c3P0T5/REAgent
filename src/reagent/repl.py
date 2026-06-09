@@ -320,10 +320,19 @@ def _make_app(*, layout: Layout | None, key_bindings: KeyBindingsBase | None) ->
 def _mcp_specs(config: Config) -> list[ServerSpec]:
     specs: list[ServerSpec] = []
     for name, server in config.mcp.servers.items():
-        if server.enabled and server.transport == "http" and server.url:
+        if not server.enabled:
+            continue
+        
+        if server.transport == "http" and server.url:
             specs.append(
-                ServerSpec(name=name, url=server.url, headers=server.headers, headers_command=server.headers_command)
+                ServerSpec(name=name, transport="http", url=server.url, headers=server.headers, headers_command=server.headers_command)
             )
+
+        elif server.transport == "stdio" and server.command:
+            specs.append(
+                ServerSpec(name=name, transport="stdio", command=server.command, args=tuple(server.args), env=server.env)
+            )
+
     return specs
 
 
