@@ -712,8 +712,12 @@ async def run(session: Session, config: Config) -> None:
                 continue
 
             if route.action == "compact":
+                task = asyncio.create_task(session.compact(compact_fn, force=True))
+                state.active_turn = task
                 try:
-                    changed = await session.compact(compact_fn, force=True)
+                    changed = await task
+                except asyncio.CancelledError:
+                    _commit(terminal_renderer.status, "Compaction cancelled")
                 except OSError as exc:
                     _commit(terminal_renderer.error, f"Compact failed: {exc}")
                 else:
@@ -722,6 +726,7 @@ async def run(session: Session, config: Config) -> None:
                         "Context compacted" if changed else "Nothing to compact yet",
                     )
                 finally:
+                    state.active_turn = None
                     state.compacting_at = None
                 await outbox.drain()
                 continue
