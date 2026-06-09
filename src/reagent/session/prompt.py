@@ -3,6 +3,50 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
+from reagent.tools.task import Task
+
+
+_OPEN_TASK_STATUSES = frozenset({"pending", "in_progress", "failed"})
+_MAX_NOTE_CHARS = 300
+
+
+def _clip_note(note: str) -> str:
+    note = " ".join(note.split())
+    if len(note) <= _MAX_NOTE_CHARS:
+        return note
+    return f"{note[: _MAX_NOTE_CHARS - 1].rstrip()}..."
+
+
+def task_context(tasks: list[Task]) -> str:
+    open_tasks = [task for task in tasks if task.status in _OPEN_TASK_STATUSES]
+    if not open_tasks:
+        return ""
+
+    open_ids = {task.id for task in open_tasks}
+    by_parent: dict[str | None, list[Task]] = {}
+    for task in open_tasks:
+        parent_id = task.parent_id if task.parent_id in open_ids else None
+        by_parent.setdefault(parent_id, []).append(task)
+
+    lines = [
+        "## Current task context",
+        "",
+        "This is live session state injected for continuity. Use it before deciding what to do next.",
+        "Update these tasks with task tools as work progresses; do not recreate duplicate tasks.",
+        "",
+    ]
+
+    def walk(parent_id: str | None, depth: int) -> None:
+        for task in by_parent.get(parent_id, []):
+            indent = "  " * depth
+            lines.append(f"{indent}- [{task.status}] {task.id}: {task.title}")
+            if task.notes:
+                lines.append(f"{indent}  notes: {_clip_note(task.notes)}")
+            walk(task.id, depth + 1)
+
+    walk(None, 0)
+    return "\n".join(lines)
+
 
 def system_prompt() -> str:
     return f"""\
@@ -16,27 +60,32 @@ then decide your next move. If an approach isn't working after a reasonable atte
 stop repeating it. Diagnose why it failed, reconsider your assumptions, and try \
 something fundamentally different.
 
+Work like a careful engineer: decompose large work into small verifiable units, \
+plan before acting, test explicit hypotheses, preserve durable findings, and verify before claiming completion.
+
 When you have the answer, state it clearly and stop.
 
-## Task management
+## Tasks
 
-Use the task tools to plan and track multi-step work.
+Use task tools for multi-step work: 3+ steps, independent sub-goals, or hypothesis → verify loops.
+Skip for single actions or conversational requests.
 
-Create a task list when:
-- The request requires 3 or more distinct steps
-- You are pursuing multiple independent sub-goals
-- You want to test a hypothesis and then verify the result
+**Structure** — one root task per goal, children for each phase:
+1. explore — gather information needed to act
+2. plan — record decisions and approach (complete before implement)
+3. implement — one subtask per logical unit
+4. verify — confirm outcome matches goal
 
-Do not create tasks when:
-- The action is single and direct
-- The request is purely conversational or informational
+**Starting** — call task_create for the full plan first; mark exactly one task in_progress before any other action.
 
-Rules:
-- Mark exactly one task in_progress at a time — set it before you begin, complete it the moment you finish
-- Write your findings or intermediate results into a task's notes field so context is not lost
-- If you hit a blocker, add a new task describing the obstacle; do not mark the blocked task completed
-- If a subtask fails, mark it failed and re-plan: create replacement tasks that take a different approach rather than retrying the same one blindly
-- Delete tasks that turn out to be irrelevant
+**Rhythm** — before each tool call, check: is the right task in_progress? Are notes current?
+Every 3–5 tool calls, pause: update notes with findings, revise remaining plan if needed.
+When a phase completes, update its tasks before starting the next phase.
+
+**Ongoing** — revise/subdivide as you learn; complete tasks immediately when done; delete irrelevant ones.
+On a failed task: mark it failed with a note on why, then create a sibling task with a different approach — do not retry the same approach or abandon the parent goal.
+
+## Skills
 
 If a skill in load_skill matches the current task, call it before proceeding.
 """

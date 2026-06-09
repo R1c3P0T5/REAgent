@@ -110,6 +110,45 @@ async def test_run_turn_uses_runtime_config(monkeypatch):
     ]
 
 
+async def test_run_turn_injects_open_task_context_without_persisting_it(monkeypatch):
+    calls = []
+    session = Session()
+    session.add_user("continue")
+    pending = session.task_registry.create("Plan work", "decide next steps")
+    completed = session.task_registry.create("Old work")
+    assert not isinstance(pending, str)
+    assert not isinstance(completed, str)
+    session.task_registry.update(pending.id, status="in_progress", notes="read prompt.py\nand turn.py")
+    session.task_registry.update(completed.id, status="completed", notes="finished already")
+
+    async def fake_call_llm(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            usage=None,
+            choices=[
+                SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(content="done", reasoning_content=""),
+                )
+            ],
+        )
+
+    monkeypatch.setattr(turn, "_call_llm", fake_call_llm)
+    monkeypatch.setattr(turn, "make_compact_fn", lambda model: lambda messages: "")
+
+    await run_turn(session, _test_config())
+
+    system_content = calls[0]["messages"][0]["content"]
+    assert "## Current task context" in system_content
+    assert f"- [in_progress] {pending.id}: Plan work" in system_content
+    assert "notes: read prompt.py and turn.py" in system_content
+    assert "Old work" not in system_content
+    assert session.messages == (
+        {"role": "user", "content": "continue"},
+        {"role": "assistant", "content": "done"},
+    )
+
+
 async def test_run_turn_propagates_cancellation_without_recording_stopped_message(monkeypatch):
     started = asyncio.Event()
     session = Session()
