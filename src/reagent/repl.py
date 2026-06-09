@@ -27,7 +27,7 @@ from rich.console import Console
 from rich.style import Style as RichStyle
 
 from reagent.compact import make_compact_fn
-from reagent.config import Config
+from reagent.config import Config, llm_completion_kwargs
 from reagent.constants import CLI_NAME
 from reagent.mcp import MCPClient, build_mcp_tools
 from reagent.mcp.types import ServerSpec
@@ -697,7 +697,7 @@ async def run(session: Session, config: Config) -> None:
     )
 
     async def _process_turns() -> None:
-        compact_fn = make_compact_fn(config.llm.model)
+        compact_fn = make_compact_fn(**llm_completion_kwargs(config))
         while True:
             user_input = await input_queue.get()
             if user_input is None:

@@ -13,7 +13,7 @@ from litellm.exceptions import APIError, BadRequestError  # noqa: E402
 from litellm.types.utils import ModelResponse  # noqa: E402
 
 from reagent.compact import make_compact_fn  # noqa: E402
-from reagent.config import Config  # noqa: E402
+from reagent.config import Config, llm_completion_kwargs  # noqa: E402
 from reagent.results import ErrorResult  # noqa: E402
 from reagent.session.prompt import system_prompt, task_context  # noqa: E402
 from reagent.session.recorder import to_provider_message  # noqa: E402
@@ -68,8 +68,15 @@ def to_provider_messages(messages: tuple[Mapping[str, Any], ...]) -> list[dict[s
     return [to_provider_message(message) for message in messages]
 
 
+def _thinking_kwargs(config: Config) -> dict[str, Any]:
+    if config.llm.model.startswith("ollama/") or config.llm.model.startswith("ollama_chat/"):
+        return {}
+    return {"thinking": {"type": "enabled", "budget_tokens": config.llm.thinking_budget_tokens}}
+
+
 async def run_turn(session: Session, config: Config, skills: list[SkillMetadata] | None = None) -> None:
-    compact_fn = make_compact_fn(config.llm.model)
+    completion_kwargs = llm_completion_kwargs(config)
+    compact_fn = make_compact_fn(**completion_kwargs)
     sys_prompt = system_prompt()
     tools = list(TOOLS)
     tool_handlers = dict(session.tool_handlers)
@@ -95,16 +102,17 @@ async def run_turn(session: Session, config: Config, skills: list[SkillMetadata]
         messages = [{"role": "system", "content": system_content}, *to_provider_messages(session.messages)]
         session.emit_thinking_update("up", session._estimate_tokens())
         try:
+            call_kwargs = {
+                "messages": messages,
+                "tools": tools,
+                "reasoning_effort": config.llm.reasoning_effort,
+                "max_retries": 10,
+                **_thinking_kwargs(config),
+                **completion_kwargs,
+            }
             resp = cast(
                 ModelResponse,
-                await _call_llm(
-                    model=config.llm.model,
-                    messages=messages,
-                    tools=tools,
-                    reasoning_effort=config.llm.reasoning_effort,
-                    thinking={"type": "enabled", "budget_tokens": config.llm.thinking_budget_tokens},
-                    max_retries=10,
-                ),
+                await _call_llm(**call_kwargs),
             )
         except BadRequestError as exc:
             session._sink.on_assistant(f"Stopped: request rejected by API - {exc}")
