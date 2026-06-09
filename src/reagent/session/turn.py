@@ -69,9 +69,7 @@ def to_provider_messages(messages: tuple[Mapping[str, Any], ...]) -> list[dict[s
 
 
 async def run_turn(session: Session, config: Config, skills: list[SkillMetadata] | None = None) -> None:
-    compact_fn = make_compact_fn(
-        config.llm.model
-    )  # TODO: make_compact_fn should use acompletion; sync call blocks event loop
+    compact_fn = make_compact_fn(config.llm.model)
     sys_prompt = system_prompt()
     tools = list(TOOLS)
     tool_handlers = dict(session.tool_handlers)
@@ -86,7 +84,7 @@ async def run_turn(session: Session, config: Config, skills: list[SkillMetadata]
 
     for _ in range(config.agent.max_turns):
         before = session._estimate_tokens()
-        session.compact(compact_fn)
+        await session.compact(compact_fn)
         after = session._estimate_tokens()
 
         if after < before:

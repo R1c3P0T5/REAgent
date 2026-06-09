@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
 
@@ -172,7 +172,7 @@ class Session:
         # ~4 chars per token; rough estimate, not precise.
         return len(json.dumps([m for m, _ in self._history], default=str)) // 4
 
-    def compact(self, completion_fn: Callable[[list[Message]], str], *, force: bool = False) -> bool:
+    async def compact(self, completion_fn: Callable[[list[Message]], Awaitable[str]], *, force: bool = False) -> bool:
         tokens = self._estimate_tokens()
         if tokens <= TOKEN_LIMIT and not force:
             return False
@@ -194,7 +194,7 @@ class Session:
         compacted_seqs = [seq for _, seq in self._history[1:compact_end] if seq is not None]
 
         try:
-            summary = completion_fn(to_compact)
+            summary = await completion_fn(to_compact)
         except Exception:
             before = self.messages
             self.truncate()

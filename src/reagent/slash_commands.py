@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 SlashOrigin = Literal["builtin", "skill"]
-SlashOutcome = Literal["not_slash", "unknown", "exit", "handled", "submit_prompt"]
+SlashOutcome = Literal["not_slash", "unknown", "exit", "handled", "submit_prompt", "compact"]
 SlashRender = Literal["default", "notice", "error", "panel"]
 
 
@@ -133,18 +133,7 @@ def dispatch(
             return SlashResult(
                 outcome="handled", message="Compact is unavailable", render="error", command_name="compact"
             )
-
-        try:
-            changed = session.compact(compact_fn, force=True)
-        except OSError as exc:
-            return SlashResult(
-                outcome="handled", message=f"Compact failed: {exc}", render="error", command_name="compact"
-            )
-
-        if changed:
-            return SlashResult(outcome="handled", message="Context compacted", render="notice", command_name="compact")
-
-        return SlashResult(outcome="handled", message="Nothing to compact yet", command_name="compact")
+        return SlashResult(outcome="compact", command_name="compact")
 
     return SlashResult(outcome="handled", message=f"Command /{command.name} is not available yet")
 
