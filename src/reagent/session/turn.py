@@ -9,7 +9,7 @@ import litellm
 
 litellm.drop_params = True
 from litellm import acompletion  # noqa: E402
-from litellm.exceptions import BadRequestError  # noqa: E402
+from litellm.exceptions import APIError, BadRequestError  # noqa: E402
 from litellm.types.utils import ModelResponse  # noqa: E402
 
 from reagent.compact import make_compact_fn  # noqa: E402
@@ -91,11 +91,17 @@ async def run_turn(session: Session, config: Config) -> None:
                     tools=TOOLS,
                     reasoning_effort=config.llm.reasoning_effort,
                     thinking={"type": "enabled", "budget_tokens": config.llm.thinking_budget_tokens},
-                    num_retries=10,
+                    max_retries=10,
                 ),
             )
         except BadRequestError as exc:
-            session.add_assistant(f"Stopped: request rejected by API - {exc}")
+            session._sink.on_assistant(f"Stopped: request rejected by API - {exc}")
+            return
+        except APIError as exc:
+            session._sink.on_assistant(f"Stopped: API error - {exc}")
+            return
+        except Exception as exc:
+            session._sink.on_assistant(f"Stopped: {type(exc).__name__}: {exc}")
             return
 
         usage = getattr(resp, "usage", None)
