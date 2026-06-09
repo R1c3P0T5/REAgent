@@ -100,6 +100,8 @@ async def run_turn(session: Session, config: Config) -> None:
         except APIError as exc:
             session._sink.on_assistant(f"Stopped: API error - {exc}")
             return
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             session._sink.on_assistant(f"Stopped: {type(exc).__name__}: {exc}")
             return
@@ -127,15 +129,14 @@ async def run_turn(session: Session, config: Config) -> None:
         if not message.tool_calls:
             raise RuntimeError(f"finish_reason=tool_calls but tool_calls is empty: {message}")
 
-        session.add_tool_calls(message)
-
+        tool_results = []
         for tc in message.tool_calls:
             name = tc.function.name or ""
 
             try:
                 tool_input = json.loads(tc.function.arguments)
             except json.JSONDecodeError as exc:
-                session.add_tool_result(tc.id, ErrorResult(f"Error: invalid tool arguments: {exc}"))
+                tool_results.append((tc.id, ErrorResult(f"Error: invalid tool arguments: {exc}")))
                 continue
 
             session.emit_tool_call(tc.id, name, tool_input)
@@ -145,6 +146,10 @@ async def run_turn(session: Session, config: Config) -> None:
             else:
                 result = ErrorResult(f"Error: unknown tool {name!r}")
 
-            session.add_tool_result(tc.id, result)
+            tool_results.append((tc.id, result))
+
+        session.add_tool_calls(message)
+        for tool_call_id, result in tool_results:
+            session.add_tool_result(tool_call_id, result)
 
     session.add_assistant(f"Stopped: reached iteration limit of {config.agent.max_turns}.")

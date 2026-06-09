@@ -1,4 +1,6 @@
+import asyncio
 import re
+import signal
 import subprocess
 import tempfile
 from typing import Any
@@ -19,6 +21,11 @@ _DANGEROUS_PATTERNS = [
     r":\(\)\s*\{.*\}",
     r">\s*/dev/sd",
 ]
+
+_INTERRUPTED_RETURNCODES = {
+    -signal.SIGINT,
+    128 + signal.SIGINT,
+}
 
 
 def _truncate(output: str) -> str:
@@ -53,6 +60,9 @@ def run_shell(command: str, timeout: int) -> ToolResult:
 
     except (FileNotFoundError, OSError) as e:
         return ErrorResult(f"Error: {e}")
+
+    if result.returncode in _INTERRUPTED_RETURNCODES:
+        raise asyncio.CancelledError()
 
     output = (result.stdout + result.stderr).strip()
     return ShellResult(_truncate(output) if output else "(no output)")
