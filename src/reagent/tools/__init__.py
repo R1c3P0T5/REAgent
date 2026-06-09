@@ -29,11 +29,14 @@ _BASE_TOOLS: list[Tool] = [
 
 _TASK_TOOL_CLASSES = [TaskCreateTool, TaskListTool, TaskGetTool, TaskUpdateTool, TaskDeleteTool]
 
-TOOLS: list[dict[str, Any]] = [t.to_schema() for t in _BASE_TOOLS] + [
-    cls.to_schema() for cls in _TASK_TOOL_CLASSES
-]
+# Throwaway registry — schemas don't depend on registry state.
+_schema_registry = TaskRegistry()
+_TASK_SCHEMA_TOOLS = [cls(_schema_registry) for cls in _TASK_TOOL_CLASSES]
 
-SILENT_TOOL_NAMES: frozenset[str] = frozenset(cls.name for cls in _TASK_TOOL_CLASSES)
+TOOLS: list[dict[str, Any]] = [t.to_schema() for t in _BASE_TOOLS + _TASK_SCHEMA_TOOLS]
+TOOLS_BY_NAME: dict[str, Tool] = {}  # populated by register_tools for dynamically added tools
+
+SILENT_TOOL_NAMES: frozenset[str] = frozenset(t.name for t in _TASK_SCHEMA_TOOLS)
 
 
 def _as_async(fn: Callable[[dict[str, Any]], Any]) -> AsyncHandler:
@@ -54,10 +57,15 @@ def make_task_handlers(registry: TaskRegistry) -> dict[str, AsyncHandler]:
 
 
 def register_tools(extra: Sequence[Tool]) -> None:
-    TOOLS.extend(t.to_schema() for t in extra)
     for t in extra:
+        TOOLS.append(t.to_schema())
+        TOOLS_BY_NAME[t.name] = t
         run = t.run
         EXTRA_HANDLERS[t.name] = run if inspect.iscoroutinefunction(run) else _as_async(run)  # type: ignore[arg-type]
 
 
-__all__ = ["Tool", "TOOLS", "AsyncHandler", "BASE_TOOL_HANDLERS", "EXTRA_HANDLERS", "SILENT_TOOL_NAMES", "make_task_handlers", "register_tools"]
+__all__ = [
+    "Tool", "TOOLS", "TOOLS_BY_NAME", "AsyncHandler",
+    "BASE_TOOL_HANDLERS", "EXTRA_HANDLERS", "SILENT_TOOL_NAMES",
+    "make_task_handlers", "register_tools",
+]

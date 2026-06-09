@@ -53,13 +53,12 @@ class Tool(ABC):
     @abstractmethod
     def run(self, params: dict[str, Any]) -> "ToolResult | Awaitable[ToolResult]": ...
 
-    @classmethod
-    def to_schema(cls) -> dict[str, Any]:
+    def to_schema(self) -> dict[str, Any]:
         return {
             "type": "function",
             "function": {
-                "name": cls.name,
-                "description": cls.description,
-                "parameters": cls.parameters,
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.parameters,
             },
         }

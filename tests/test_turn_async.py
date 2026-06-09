@@ -96,6 +96,6 @@ async def test_run_turn_uses_runtime_config(monkeypatch):
             "tools": turn.TOOLS,
             "reasoning_effort": "high",
             "thinking": {"type": "enabled", "budget_tokens": 1234},
-            "num_retries": 10,
+            "max_retries": 10,
         }
     ]
