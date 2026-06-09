@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import signal
 import time
 from collections.abc import Callable
@@ -231,6 +232,22 @@ def _fmt_thinking(frame: str, *, elapsed: float, token_part: str) -> FormattedTe
     )
 
 
+_COMPACT_TAU_SECONDS = 15
+
+
+def _fmt_compacting(frame: str, *, pct: int, width: int = 20) -> FormattedText:
+    filled = round(pct / 100 * width)
+    return FormattedText(
+        [
+            ("class:thinking-frame", frame),
+            ("class:thinking", " compacting  "),
+            ("class:thinking-frame", "█" * filled),
+            ("class:thinking", "░" * (width - filled)),
+            ("class:thinking", f" {pct}%"),
+        ]
+    )
+
+
 def _enter_action(text: str) -> Literal["newline", "submit", "ignore"]:
     if text.endswith("\\"):
         return "newline"
@@ -428,6 +445,14 @@ async def run(session: Session, config: Config) -> None:
         return ANSI(calls.render(width=terminal_console.width))
 
     def _get_status() -> FormattedText:
+        if session.compacting_at is not None:
+            elapsed = time.monotonic() - session.compacting_at
+            frame = SPINNER_FRAMES[int(elapsed * 1000 / _SPINNER_MS) % len(SPINNER_FRAMES)]
+            pct = min(95, round((1 - math.exp(-elapsed / _COMPACT_TAU_SECONDS)) * 100))
+            return _fmt_compacting(frame, pct=pct)
+        done = session.compact_done_at
+        if done is not None and time.monotonic() - done < 0.5:
+            return _fmt_compacting(SPINNER_FRAMES[0], pct=100)
         t = state.thinking_at
         if t is not None:
             elapsed = time.monotonic() - t
@@ -473,7 +498,7 @@ async def run(session: Session, config: Config) -> None:
         return bool(calls.calls)
 
     def _has_status() -> bool:
-        return _is_thinking() or bool(state.status_text)
+        return bool(_get_status())
 
     def _has_gap() -> bool:
         return _has_calls() or _has_status()
