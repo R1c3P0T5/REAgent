@@ -41,7 +41,7 @@ from reagent.rendering import (
 )
 from reagent.results import ErrorResult, ToolResult
 from reagent.session import Session
-from reagent.tools.task import fmt_tree_lines, registry as task_registry
+from reagent.tools.task import fmt_tree_lines
 from reagent.session.turn import run_turn
 from reagent.slash_commands import SlashCommand, SlashRender, SlashResult, completions, dispatch
 from reagent.tools import register_tools
@@ -414,7 +414,7 @@ async def run(session: Session, config: Config) -> None:
             arrow = "↑" if state.think_phase == "up" else "↓"
             token_part = f"  {arrow}{state.think_tokens}" if state.think_tokens else ""
             parts: list[tuple[str, str]] = list(_fmt_thinking(frame, elapsed=elapsed, token_part=token_part))
-            tasks = task_registry.list()
+            tasks = session.task_registry.list()
             if any(t.status == "in_progress" for t in tasks):
                 for i, (indent, icon, title) in enumerate(fmt_tree_lines(tasks)):
                     parts.append(("class:thinking", "\n  ⎿  " if i == 0 else "\n     "))
@@ -686,17 +686,20 @@ async def run(session: Session, config: Config) -> None:
             _invalidate()
 
             interrupted = False
+            turn_exc: Exception | None = None
             try:
                 await turn_task
             except asyncio.CancelledError:
                 interrupted = True
+            except Exception as exc:
+                turn_exc = exc
             finally:
                 elapsed = time.monotonic() - (state.thinking_at or 0.0)
                 state.thinking_at = None
                 state.think_phase = ""
                 state.think_tokens = 0
                 _set_status(f"• thinking for {_fmt_elapsed(elapsed)}", style_class="thinking-for")
-                state.tasks_snapshot = task_registry.list()
+                state.tasks_snapshot = session.task_registry.list()
                 state.active_turn = None
                 session.emit_thinking_stop()
                 loop.remove_signal_handler(signal.SIGINT)
@@ -705,6 +708,9 @@ async def run(session: Session, config: Config) -> None:
 
             if interrupted:
                 _set_status("■ Conversation interrupted")
+            elif turn_exc is not None:
+                _commit(terminal_renderer.error, f"Stopped: {type(turn_exc).__name__}: {turn_exc}")
+                await outbox.drain()
 
     async with MCPClient(_mcp_specs(config), emit=session.emit_status) as mcp:
         register_tools(build_mcp_tools(mcp))
