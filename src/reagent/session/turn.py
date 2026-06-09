@@ -15,7 +15,7 @@ from litellm.types.utils import ModelResponse  # noqa: E402
 from reagent.compact import make_compact_fn  # noqa: E402
 from reagent.config import Config  # noqa: E402
 from reagent.results import ErrorResult  # noqa: E402
-from reagent.session.prompt import system_prompt  # noqa: E402
+from reagent.session.prompt import system_prompt, task_context  # noqa: E402
 from reagent.session.recorder import to_provider_message  # noqa: E402
 from reagent.session.session import Session  # noqa: E402
 from reagent.tools import TOOLS  # noqa: E402
@@ -92,7 +92,9 @@ async def run_turn(session: Session, config: Config, skills: list[SkillMetadata]
         if after < before:
             session.emit_status(f"[compact: {before} → {after} tokens]")
 
-        messages = [{"role": "system", "content": sys_prompt}, *to_provider_messages(session.messages)]
+        current_task_context = task_context(session.task_registry.list())
+        system_content = f"{sys_prompt}\n{current_task_context}" if current_task_context else sys_prompt
+        messages = [{"role": "system", "content": system_content}, *to_provider_messages(session.messages)]
         session.emit_thinking_update("up", session._estimate_tokens())
         try:
             resp = cast(

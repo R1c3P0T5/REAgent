@@ -104,11 +104,14 @@ def fmt_tree_lines(tasks: list[Task]) -> list[tuple[str, str, str]]:
 
 class TaskCreateTool(Tool):
     name = "task_create"
-    description = "Create a TODO task. Pass parent_id to nest under an existing task."
+    description = (
+        "Create a task. Call this first to lay out the full plan before acting. "
+        "Pass parent_id to nest under a phase or goal."
+    )
     parameters = params(
         {
             "title": prop("string", "Short task title"),
-            "description": prop("string", "Optional details"),
+            "description": prop("string", "Acceptance criteria or planned approach"),
             "parent_id": prop("string", "Parent task ID to nest under"),
         },
         required=["title"],
@@ -126,7 +129,7 @@ class TaskCreateTool(Tool):
 
 class TaskListTool(Tool):
     name = "task_list"
-    description = "List all TODO tasks as a tree."
+    description = "List all tasks including completed/cancelled ones (injected context only shows open tasks)."
     parameters = params({}, required=[])
 
     def __init__(self, registry: TaskRegistry) -> None:
@@ -139,7 +142,7 @@ class TaskListTool(Tool):
 
 class TaskGetTool(Tool):
     name = "task_get"
-    description = "Get a task and its direct children."
+    description = "Get full task details including untruncated notes (injected context clips notes at 300 chars)."
     parameters = params({"task_id": prop("string")}, required=["task_id"])
 
     def __init__(self, registry: TaskRegistry) -> None:
@@ -154,12 +157,16 @@ class TaskGetTool(Tool):
 
 class TaskUpdateTool(Tool):
     name = "task_update"
-    description = "Update a task's status or notes. status: pending | in_progress | completed | cancelled | failed"
+    description = (
+        "Update a task's status or notes. "
+        "Notes should capture key findings and decisions — enough to resume the task cold. "
+        "Call before switching tasks and after completing a phase."
+    )
     parameters = params(
         {
             "task_id": prop("string"),
             "status": prop("string", "pending | in_progress | completed | cancelled | failed"),
-            "notes": prop("string", "Optional progress notes"),
+            "notes": prop("string", "Findings and decisions so far; written to be resumable"),
         },
         required=["task_id"],
     )
@@ -177,7 +184,7 @@ class TaskUpdateTool(Tool):
 
 class TaskDeleteTool(Tool):
     name = "task_delete"
-    description = "Remove a task from the list."
+    description = "Delete a task and all its subtasks."
     parameters = params({"task_id": prop("string")}, required=["task_id"])
 
     def __init__(self, registry: TaskRegistry) -> None:
