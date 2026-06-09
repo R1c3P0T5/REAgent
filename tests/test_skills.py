@@ -79,6 +79,62 @@ description: This should not load.
     assert discover_skills([str(tmp_path / "skills")]) == []
 
 
+def test_discover_skills_ignores_names_with_underscores(tmp_path):
+    write_skill(
+        tmp_path / "skills" / "bad_name" / "SKILL.md",
+        """\
+---
+name: bad_name
+description: This should not load.
+---
+""",
+    )
+
+    assert discover_skills([str(tmp_path / "skills")]) == []
+
+
+def test_discover_skills_ignores_names_with_consecutive_hyphens(tmp_path):
+    write_skill(
+        tmp_path / "skills" / "bad--name" / "SKILL.md",
+        """\
+---
+name: bad--name
+description: This should not load.
+---
+""",
+    )
+
+    assert discover_skills([str(tmp_path / "skills")]) == []
+
+
+def test_discover_skills_ignores_names_with_trailing_hyphen(tmp_path):
+    write_skill(
+        tmp_path / "skills" / "bad-name-" / "SKILL.md",
+        """\
+---
+name: bad-name-
+description: This should not load.
+---
+""",
+    )
+
+    assert discover_skills([str(tmp_path / "skills")]) == []
+
+
+def test_discover_skills_ignores_name_mismatching_directory(tmp_path):
+    write_skill(
+        tmp_path / "skills" / "pe-analysis" / "SKILL.md",
+        """\
+---
+name: elf-analysis
+description: Name does not match directory.
+---
+""",
+    )
+
+    assert discover_skills([str(tmp_path / "skills")]) == []
+
+
 def test_discover_skills_ignores_builtin_slash_command_collisions(tmp_path):
     write_skill(
         tmp_path / "skills" / "status" / "SKILL.md",
@@ -155,6 +211,39 @@ description: Analyze PE files: imports, exports, resources.
     skills = discover_skills([str(tmp_path / "skills")])
 
     assert skills[0].description == "Analyze PE files: imports, exports, resources."
+
+
+def test_discover_skills_parses_compatibility_field(tmp_path):
+    write_skill(
+        tmp_path / "skills" / "pe-analysis" / "SKILL.md",
+        """\
+---
+name: pe-analysis
+description: Analyze PE files.
+compatibility: Requires radare2 and binwalk
+---
+""",
+    )
+
+    skills = discover_skills([str(tmp_path / "skills")])
+
+    assert skills[0].compatibility == "Requires radare2 and binwalk"
+
+
+def test_discover_skills_compatibility_defaults_to_empty(tmp_path):
+    write_skill(
+        tmp_path / "skills" / "pe-analysis" / "SKILL.md",
+        """\
+---
+name: pe-analysis
+description: Analyze PE files.
+---
+""",
+    )
+
+    skills = discover_skills([str(tmp_path / "skills")])
+
+    assert skills[0].compatibility == ""
 
 
 def test_discover_skills_respects_disabled_flag(tmp_path):
