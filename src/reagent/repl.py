@@ -102,6 +102,17 @@ class _ReplState:
     tasks_snapshot: list = field(default_factory=list)
 
 
+def _cancel_active_turn(state: _ReplState) -> bool:
+    t = state.active_turn
+    if t is None:
+        return False
+
+    t.cancel()
+    state.hint = ""
+    state.last_ctrl_c = 0.0
+    return True
+
+
 @dataclass(frozen=True)
 class _SlashRoute:
     action: Literal["exit", "handled", "submit"]
@@ -163,6 +174,13 @@ class _PendingCalls:
         return "\n".join(chunks)
 
 
+def _clear_pending_calls(calls: _PendingCalls) -> bool:
+    if not calls.calls:
+        return False
+    calls.calls.clear()
+    return True
+
+
 def _tool_call_bullet_style(
     state: Literal["pending", "success", "error"],
     *,
@@ -212,14 +230,12 @@ def _fmt_thinking(frame: str, *, elapsed: float, token_part: str) -> FormattedTe
     )
 
 
-def _enter_action(text: str, *, is_running: bool) -> Literal["newline", "hint", "submit", "ignore"]:
+def _enter_action(text: str) -> Literal["newline", "submit", "ignore"]:
     if text.endswith("\\"):
         return "newline"
     stripped = text.strip()
     if not stripped:
         return "ignore"
-    if is_running:
-        return "hint"
     return "submit"
 
 
@@ -524,13 +540,10 @@ async def run(session: Session, config: Config) -> None:
             state.hint = ""
             input_queue.put_nowait(text)
             return
-        action = _enter_action(buf.text, is_running=_is_running())
+        action = _enter_action(buf.text)
         if action == "newline":
             event.current_buffer.delete_before_cursor()
             event.current_buffer.insert_text("\n")
-        elif action == "hint":
-            state.hint = _BUSY_HINT
-            _invalidate()
         elif action == "submit":
             text = buf.text
             event.current_buffer.reset()
@@ -556,10 +569,13 @@ async def run(session: Session, config: Config) -> None:
         state.slash_idx = (state.slash_idx - 1) % len(state.slash_cmds)
         _invalidate()
 
-    @kb.add("escape", filter=Condition(_has_completions), eager=True)
-    def _dismiss_completions(event) -> None:
-        state.slash_cmds = []
-        _invalidate()
+    @kb.add("escape", filter=Condition(lambda: _has_completions() or _is_running()), eager=True)
+    def _escape(event) -> None:
+        if _has_completions():
+            state.slash_cmds = []
+            _invalidate()
+        elif _cancel_active_turn(state):
+            _invalidate()
 
     @kb.add("f20")
     @kb.add("escape", "enter", eager=True)
@@ -568,11 +584,8 @@ async def run(session: Session, config: Config) -> None:
 
     @kb.add("c-c", eager=True)
     def _ctrl_c(event) -> None:
-        t = state.active_turn
-        if t is not None:
-            t.cancel()
-            state.hint = ""
-            state.last_ctrl_c = 0.0
+        if _cancel_active_turn(state):
+            _invalidate()
         else:
             now = time.monotonic()
             if now - state.last_ctrl_c <= _CTRL_C_WINDOW:
@@ -583,12 +596,6 @@ async def run(session: Session, config: Config) -> None:
                 state.hint = _EXIT_HINT
                 _schedule_ctrl_c_hint_clear()
                 _invalidate()
-
-    @kb.add("escape", filter=Condition(_is_thinking), eager=True)
-    def _interrupt(event) -> None:
-        t = state.active_turn
-        if t is not None:
-            t.cancel()
 
     @kb.add("c-d")
     def _eof(event) -> None:
@@ -704,6 +711,7 @@ async def run(session: Session, config: Config) -> None:
                 session.emit_thinking_stop()
                 loop.remove_signal_handler(signal.SIGINT)
                 await outbox.drain()
+                _clear_pending_calls(calls)
                 output_app.invalidate()
 
             if interrupted:
