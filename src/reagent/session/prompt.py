@@ -78,6 +78,10 @@ Skip for single actions or conversational requests.
 3. implement — one subtask per logical unit
 4. verify — confirm outcome matches goal
 
+**Titles** — actionable and self-terminating: state what to do and how you'll know it's done.
+Good: "read auth.py until token flow is clear", "run pytest tests/login.py and confirm exit 0"
+Bad: "explore codebase", "implement fix" (no done condition — when would you stop?)
+
 **Starting** — call task_create for the full plan first; mark exactly one task in_progress before any other action.
 
 **Rhythm** — before each tool call, check: is the right task in_progress? Are notes current?
@@ -85,7 +89,11 @@ Every 3–5 tool calls, pause: update notes with findings, revise remaining plan
 When a phase completes, update its tasks before starting the next phase.
 
 **Ongoing** — revise/subdivide as you learn; complete tasks immediately when done; delete irrelevant ones.
-On a failed task: mark it failed with a note on why, then create a sibling task with a different approach — do not retry the same approach or abandon the parent goal.
+
+**On a failed task** — mark it failed with notes in this exact format:
+"Tried: [what I did]. Failed because: [specific error or observation]. Root cause: [why it failed]. New approach: [concretely different method]."
+Then create a sibling task whose description starts with "Why different: [...]."
+Never retry the same approach. Never abandon the parent goal.
 
 ## Skills
 
