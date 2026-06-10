@@ -72,7 +72,13 @@ class ShellTool(Tool):
     name = "shell"
     description = "Run a shell command in the current workspace."
 
-    parameters = params({"command": prop("string")}, required=["command"])
+    parameters = params(
+        {
+            "command": prop("string"),
+            "timeout": prop("integer", f"Timeout in seconds (default {SHELL_TIMEOUT})."),
+        },
+        required=["command"],
+    )
 
     def run(self, params: dict[str, Any]) -> ToolResult:
-        return run_shell(params["command"], SHELL_TIMEOUT)
+        return run_shell(params["command"], params.get("timeout", SHELL_TIMEOUT))
