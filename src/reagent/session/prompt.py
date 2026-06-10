@@ -8,13 +8,14 @@ from reagent.tools.task import Task
 
 _OPEN_TASK_STATUSES = frozenset({"pending", "in_progress", "failed"})
 _MAX_NOTE_CHARS = 300
+_MAX_NOTE_CHARS_FAILED = 600  # failed tasks need more room for diagnosis
 
 
-def _clip_note(note: str) -> str:
+def _clip_note(note: str, limit: int = _MAX_NOTE_CHARS) -> str:
     note = " ".join(note.split())
-    if len(note) <= _MAX_NOTE_CHARS:
+    if len(note) <= limit:
         return note
-    return f"{note[: _MAX_NOTE_CHARS - 1].rstrip()}..."
+    return f"{note[: limit - 1].rstrip()}..."
 
 
 def task_context(tasks: list[Task]) -> str:
@@ -41,7 +42,8 @@ def task_context(tasks: list[Task]) -> str:
             indent = "  " * depth
             lines.append(f"{indent}- [{task.status}] {task.id}: {task.title}")
             if task.notes:
-                lines.append(f"{indent}  notes: {_clip_note(task.notes)}")
+                limit = _MAX_NOTE_CHARS_FAILED if task.status == "failed" else _MAX_NOTE_CHARS
+                lines.append(f"{indent}  notes: {_clip_note(task.notes, limit)}")
             walk(task.id, depth + 1)
 
     walk(None, 0)
