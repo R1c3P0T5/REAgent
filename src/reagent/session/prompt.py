@@ -8,13 +8,14 @@ from reagent.tools.task import Task
 
 _OPEN_TASK_STATUSES = frozenset({"pending", "in_progress", "failed"})
 _MAX_NOTE_CHARS = 300
+_MAX_NOTE_CHARS_FAILED = 600  # failed tasks need more room for diagnosis
 
 
-def _clip_note(note: str) -> str:
+def _clip_note(note: str, limit: int = _MAX_NOTE_CHARS) -> str:
     note = " ".join(note.split())
-    if len(note) <= _MAX_NOTE_CHARS:
+    if len(note) <= limit:
         return note
-    return f"{note[: _MAX_NOTE_CHARS - 1].rstrip()}..."
+    return f"{note[: limit - 1].rstrip()}..."
 
 
 def task_context(tasks: list[Task]) -> str:
@@ -41,7 +42,8 @@ def task_context(tasks: list[Task]) -> str:
             indent = "  " * depth
             lines.append(f"{indent}- [{task.status}] {task.id}: {task.title}")
             if task.notes:
-                lines.append(f"{indent}  notes: {_clip_note(task.notes)}")
+                limit = _MAX_NOTE_CHARS_FAILED if task.status == "failed" else _MAX_NOTE_CHARS
+                lines.append(f"{indent}  notes: {_clip_note(task.notes, limit)}")
             walk(task.id, depth + 1)
 
     walk(None, 0)
@@ -71,19 +73,32 @@ Use task tools for multi-step work: 3+ steps, independent sub-goals, or hypothes
 Skip for single actions or conversational requests.
 
 **Structure** — one root task per goal, children for each phase:
-1. explore — gather information needed to act
-2. plan — record decisions and approach (complete before implement)
+1. explore — map what you know, what you don't, and at least two candidate approaches with their key unknowns
+2. plan — choose one approach and note why the alternatives were set aside; if two approaches have similar odds, create one implement subtask per branch before starting either
 3. implement — one subtask per logical unit
 4. verify — confirm outcome matches goal
+
+**Titles** — actionable and self-terminating: state what to do and how you'll know it's done.
+Good: "read auth.py until token flow is clear", "run pytest tests/login.py and confirm exit 0"
+Bad: "explore codebase", "implement fix" (no done condition — when would you stop?)
 
 **Starting** — call task_create for the full plan first; mark exactly one task in_progress before any other action.
 
 **Rhythm** — before each tool call, check: is the right task in_progress? Are notes current?
 Every 3–5 tool calls, pause: update notes with findings, revise remaining plan if needed.
 When a phase completes, update its tasks before starting the next phase.
+Before moving from plan → implement: can you name the approach you rejected and why? If not, the plan phase is incomplete.
 
 **Ongoing** — revise/subdivide as you learn; complete tasks immediately when done; delete irrelevant ones.
-On a failed task: mark it failed with a note on why, then create a sibling task with a different approach — do not retry the same approach or abandon the parent goal.
+
+**On a failed task** — before pivoting, ask: was this task broken down finely enough?
+If the failure reveals an unexplored sub-problem, subdivide and try it first.
+Only mark failed and create a sibling when the current approach is genuinely exhausted.
+
+When pivoting: mark it failed with notes in this exact format:
+"Tried: [what I did]. Failed because: [specific error or observation]. Root cause: [why it failed]. New approach: [concretely different method]."
+Then create a sibling task whose title names how this approach differs from the one that failed.
+Never retry the same approach. Never abandon the parent goal.
 
 ## Skills
 
