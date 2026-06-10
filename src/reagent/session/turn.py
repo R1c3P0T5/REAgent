@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections import deque
 from collections.abc import Mapping
 from typing import Any, cast
 
@@ -68,6 +69,13 @@ def to_provider_messages(messages: tuple[Mapping[str, Any], ...]) -> list[dict[s
     return [to_provider_message(message) for message in messages]
 
 
+_STALL_THRESHOLD = 4  # turns on the same in_progress task before warning
+_DOOM_LOOP_THRESHOLD = 3  # identical (tool, args) calls in a row before warning
+# task_list / task_get are diagnostic reads the agent uses to orient itself;
+# detecting "loops" on them would produce false positives.
+_DOOM_LOOP_SKIP = frozenset({"task_list", "task_get"})
+
+
 async def run_turn(session: Session, config: Config, skills: list[SkillMetadata] | None = None) -> None:
     compact_fn = make_compact_fn(config.llm.model)
     sys_prompt = system_prompt()
@@ -82,6 +90,10 @@ async def run_turn(session: Session, config: Config, skills: list[SkillMetadata]
 
         tool_handlers[load_skill_tool.name] = load_skill_handler
 
+    stall_task_id: str | None = None
+    stall_count: int = 0
+    recent_calls: deque[tuple[str, str]] = deque(maxlen=_DOOM_LOOP_THRESHOLD)
+
     for _ in range(config.agent.max_turns):
         before = session._estimate_tokens()
         await session.compact(compact_fn)
@@ -92,6 +104,13 @@ async def run_turn(session: Session, config: Config, skills: list[SkillMetadata]
 
         current_task_context = task_context(session.task_registry.list())
         system_content = f"{sys_prompt}\n{current_task_context}" if current_task_context else sys_prompt
+        if stall_count >= _STALL_THRESHOLD:
+            system_content += (
+                f"\n\nSTALL: task {stall_task_id!r} has been in_progress for {stall_count} turns. "
+                "First ask: is this task granular enough? If not, subdivide it. "
+                "If the approach is genuinely exhausted, mark it failed with a diagnosis note "
+                "and create a sibling task whose title names how the new approach differs."
+            )
         messages = [{"role": "system", "content": system_content}, *to_provider_messages(session.messages)]
         session.emit_thinking_update("up", session._estimate_tokens())
         try:
@@ -152,6 +171,23 @@ async def run_turn(session: Session, config: Config, skills: list[SkillMetadata]
                 continue
 
             session.emit_tool_call(tc.id, name, tool_input)
+
+            # Doom loop: identical (tool, args) repeated _DOOM_LOOP_THRESHOLD times in a row
+            if name not in _DOOM_LOOP_SKIP:
+                sig = (name, json.dumps(tool_input, sort_keys=True))
+                recent_calls.append(sig)
+                if len(recent_calls) == _DOOM_LOOP_THRESHOLD and len(set(recent_calls)) == 1:
+                    recent_calls.clear()
+                    tool_results.append((
+                        tc.id,
+                        ErrorResult(
+                            f"LOOP DETECTED: '{name}' called with identical arguments "
+                            f"{_DOOM_LOOP_THRESHOLD} times in a row. This approach is not working. "
+                            "Stop, diagnose the root cause, and try something fundamentally different."
+                        ),
+                    ))
+                    continue
+
             handler = tool_handlers.get(name)
             if handler is not None:
                 result = await handler(tool_input)
@@ -163,5 +199,14 @@ async def run_turn(session: Session, config: Config, skills: list[SkillMetadata]
         session.add_tool_calls(message)
         for tool_call_id, result in tool_results:
             session.add_tool_result(tool_call_id, result)
+
+        # Stall detection: same in_progress task with no status change
+        in_progress = [t for t in session.task_registry.list() if t.status == "in_progress"]
+        current_id = in_progress[0].id if in_progress else None
+        if current_id is not None and current_id == stall_task_id:
+            stall_count += 1
+        else:
+            stall_task_id = current_id
+            stall_count = 0
 
     session.add_assistant(f"Stopped: reached iteration limit of {config.agent.max_turns}.")
