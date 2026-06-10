@@ -73,8 +73,8 @@ Use task tools for multi-step work: 3+ steps, independent sub-goals, or hypothes
 Skip for single actions or conversational requests.
 
 **Structure** — one root task per goal, children for each phase:
-1. explore — gather information needed to act
-2. plan — record decisions and approach (complete before implement)
+1. explore — map what you know, what you don't, and at least two candidate approaches with their key unknowns
+2. plan — choose one approach and note why the alternatives were set aside; if two approaches have similar odds, create one implement subtask per branch before starting either
 3. implement — one subtask per logical unit
 4. verify — confirm outcome matches goal
 
@@ -87,12 +87,17 @@ Bad: "explore codebase", "implement fix" (no done condition — when would you s
 **Rhythm** — before each tool call, check: is the right task in_progress? Are notes current?
 Every 3–5 tool calls, pause: update notes with findings, revise remaining plan if needed.
 When a phase completes, update its tasks before starting the next phase.
+Before moving from plan → implement: can you name the approach you rejected and why? If not, the plan phase is incomplete.
 
 **Ongoing** — revise/subdivide as you learn; complete tasks immediately when done; delete irrelevant ones.
 
-**On a failed task** — mark it failed with notes in this exact format:
+**On a failed task** — before pivoting, ask: was this task broken down finely enough?
+If the failure reveals an unexplored sub-problem, subdivide and try it first.
+Only mark failed and create a sibling when the current approach is genuinely exhausted.
+
+When pivoting: mark it failed with notes in this exact format:
 "Tried: [what I did]. Failed because: [specific error or observation]. Root cause: [why it failed]. New approach: [concretely different method]."
-Then create a sibling task whose description starts with "Why different: [...]."
+Then create a sibling task whose title names how this approach differs from the one that failed.
 Never retry the same approach. Never abandon the parent goal.
 
 ## Skills
