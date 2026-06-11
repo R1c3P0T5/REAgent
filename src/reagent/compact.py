@@ -115,7 +115,7 @@ def _extract_summary(raw: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", (m.group(1) if m else raw)).strip()
 
 
-def make_compact_fn(model: str):
+def make_compact_fn(model: str, **provider_kwargs: str):
     async def _compact(turns: list[Message]) -> str:
         resp = await acompletion(
             model=model,
@@ -124,6 +124,7 @@ def make_compact_fn(model: str):
                 {"role": "user", "content": json.dumps(turns, default=str)},
             ],
             num_retries=3,
+            **provider_kwargs,
         )
         return _extract_summary(cast(ModelResponse, resp).choices[0].message.content or "")
 

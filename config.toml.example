@@ -7,6 +7,8 @@ thinking_budget_tokens = 8192
 available = [
   "openai/gpt-5.1",
   "anthropic/claude-sonnet-4-6",
+  "ollama/qwen2.5-coder:14b",
+  "ollama/qwen3:14b",
 ]
 
 [agent]
@@ -17,6 +19,9 @@ key = "..."
 
 [providers.openai]
 key = "..."
+
+[providers.ollama]
+base_url = "http://127.0.0.1:11434"
 
 [mcp.servers.example]
 enabled = true

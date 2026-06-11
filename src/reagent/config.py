@@ -125,6 +125,36 @@ def apply_provider_env(config: Config, env: MutableMapping[str, str] | None = No
             target.setdefault(env_name, provider.key)
 
 
+def llm_provider_kwargs(config: Config) -> dict[str, str]:
+    """Return LiteLLM call kwargs for the provider selected by llm.model."""
+    provider_name, _, _ = config.llm.model.partition("/")
+    if not provider_name:
+        return {}
+
+    provider = config.providers.get(provider_name)
+    if provider is None:
+        return {}
+
+    kwargs: dict[str, str] = {}
+    if provider.base_url:
+        kwargs["api_base"] = provider.base_url
+    if provider.key:
+        kwargs["api_key"] = provider.key
+    return kwargs
+
+
+def llm_completion_kwargs(config: Config) -> dict[str, str]:
+    """Return LiteLLM completion kwargs for the configured chat model."""
+    return {"model": _litellm_model(config.llm.model), **llm_provider_kwargs(config)}
+
+
+def _litellm_model(model: str) -> str:
+    # ollama/ uses /api/generate (legacy); ollama_chat/ uses /api/chat (required for tools)
+    if model.startswith("ollama/"):
+        return f"ollama_chat/{model.split('/', 1)[1]}"
+    return model
+
+
 def user_config_path(env: Mapping[str, str] | None = None) -> Path:
     """Return the user-level config path used by provider management commands."""
     effective_env = os.environ if env is None else env

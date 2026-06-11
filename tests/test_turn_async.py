@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from reagent.config import AgentConfig, Config, LLMConfig, LLMModelsConfig, MCPConfig, SkillsConfig
+from reagent.config import AgentConfig, Config, LLMConfig, LLMModelsConfig, MCPConfig, ProviderConfig, SkillsConfig
 from reagent.results import TextResult
 import reagent.session.turn as turn
 from reagent.session import Session, load_session
@@ -41,6 +41,21 @@ def _test_config(*, max_turns=1):
         ),
         agent=AgentConfig(max_turns=max_turns),
         providers={},
+        mcp=MCPConfig(servers={}),
+        skills=SkillsConfig(enabled=True, paths=[]),
+    )
+
+
+def _ollama_config():
+    return Config(
+        llm=LLMConfig(
+            model="ollama/qwen3:14b",
+            reasoning_effort="low",
+            thinking_budget_tokens=2048,
+            models=LLMModelsConfig(available=[]),
+        ),
+        agent=AgentConfig(max_turns=1),
+        providers={"ollama": ProviderConfig(base_url="http://127.0.0.1:11434")},
         mcp=MCPConfig(servers={}),
         skills=SkillsConfig(enabled=True, paths=[]),
     )
@@ -108,6 +123,36 @@ async def test_run_turn_uses_runtime_config(monkeypatch):
             "max_retries": 10,
         }
     ]
+
+
+async def test_run_turn_uses_ollama_native_prefix(monkeypatch):
+    calls = []
+    session = Session()
+    session.add_user("hello")
+
+    async def fake_call_llm(**kwargs):
+        calls.append(kwargs)
+        return SimpleNamespace(
+            usage=None,
+            choices=[
+                SimpleNamespace(
+                    finish_reason="stop",
+                    message=SimpleNamespace(content="hello back", reasoning_content="", tool_calls=None),
+                )
+            ],
+        )
+
+    monkeypatch.setattr(turn, "_call_llm", fake_call_llm)
+    monkeypatch.setattr(turn, "make_compact_fn", lambda model, **kwargs: lambda messages: "")
+
+    await run_turn(session, _ollama_config())
+
+    assert "tools" in calls[0]
+    assert len(calls) == 1
+    assert calls[0]["model"] == "ollama_chat/qwen3:14b"
+    assert calls[0]["api_base"] == "http://127.0.0.1:11434"
+    assert "thinking" not in calls[0]
+    assert session.messages[-1] == {"role": "assistant", "content": "hello back"}
 
 
 async def test_run_turn_injects_open_task_context_without_persisting_it(monkeypatch):
